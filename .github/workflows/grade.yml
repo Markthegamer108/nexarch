@@ -31,7 +31,13 @@ jobs:
         part: [0, 1, 2, 3]
     env:
       KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+      DATASET: ${{ inputs.dataset }}
+      DATAFILE: ${{ inputs.datafile }}
+      GRADE_SECONDS: ${{ inputs.seconds }}
+      OUT: grade-gh-${{ matrix.shard }}-${{ matrix.part }}.bin
     steps:
+      - name: Start the clock
+        run: echo "JOB_START=$(date +%s)" >> "$GITHUB_ENV"
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
         with:
@@ -39,21 +45,39 @@ jobs:
       - name: Install tools
         run: pip install -q numpy chess kaggle six
       - name: Download engines and positions
+        # A dataset that Kaggle has just reported as "ready" can still answer 404 for a while (we saw about
+        # 35 minutes), so every download is retried for up to an hour before the job gives up.
         run: |
-          kaggle datasets download markthegamer108/nexarch-engines -p . --unzip -q
+          fetch() {  # fetch DATASET DIR FILE_THAT_MUST_EXIST
+            for i in $(seq 1 13); do
+              if kaggle datasets download "$1" -p "$2" --unzip -o -q && [ -f "$3" ]; then return 0; fi
+              echo "::warning::download of $1 failed (try $i/13), retrying in 5 minutes"
+              sleep 300
+            done
+            echo "::error::could not download $1"
+            return 1
+          }
+          fetch markthegamer108/nexarch-engines . engines/bin/stockfish
           chmod -R u+x engines/bin engines/real engines/lib
-          kaggle datasets download "${{ inputs.dataset }}" -p data --unzip -q
+          fetch "$DATASET" data "data/$DATAFILE"
           ls engines/bin | wc -l; ls -la data
       - name: Grade
         # Kaggle runs the same shards from the front, these jobs walk them from the back (no overlap).
-        run: >
-          python tools/grade.py --config nets/graders.json --data "data/${{ inputs.datafile }}"
-          --out grade-gh-${{ matrix.shard }}-${{ matrix.part }}.bin --workers 4
-          --shard ${{ matrix.shard }} --shards 4 --reverse --part ${{ matrix.part }} --parts 4
-          --seconds ${{ inputs.seconds }} --flush-every 50
+        # If the downloads needed retries, grading gets shorter so the job still finishes, and uploads,
+        # before its time limit.
+        run: |
+          left=$(( 355 * 60 - ($(date +%s) - JOB_START) - 900 ))
+          secs=$GRADE_SECONDS
+          if [ "$left" -lt "$secs" ]; then secs=$left; fi
+          if [ "$secs" -lt 60 ]; then echo "::error::no time left to grade"; exit 1; fi
+          echo "grading for $secs seconds"
+          python tools/grade.py --config nets/graders.json --data "data/$DATAFILE" --out "$OUT" --workers 4 \
+            --shard ${{ matrix.shard }} --shards 4 --reverse --part ${{ matrix.part }} --parts 4 \
+            --seconds "$secs" --flush-every 50
       - name: Report card
-        run: python tools/report_card.py grade-gh-${{ matrix.shard }}-${{ matrix.part }}.bin.meta.npz
+        run: python tools/report_card.py "$OUT.meta.npz"
       - uses: actions/upload-artifact@v5
+        if: always()
         with:
           name: grade-gh-${{ matrix.shard }}-${{ matrix.part }}
           path: grade-gh-${{ matrix.shard }}-${{ matrix.part }}.bin*
