@@ -17,7 +17,7 @@ do now.
 - null move pruning, futility pruning, late move reductions
 - NNUE network `(768 -> H) x 2 -> 1` with SCReLU, quantized to integers
 
-The network gets trained on a GPU but the engine only needs a CPU. I wanted it to run on any laptop,
+The network gets trained on a GPU but the engine only needs a CPU. I wanted it to run on any laptop or PC,
 not just on a PC with a graphics card.
 
 ## How a new generation gets made
@@ -41,7 +41,7 @@ has the list, what each one does, their licenses and where to download them.
 | Gen 0 | nothing, it just counts material | starting point |
 | Gen 1 | Gen 0's self-play games | +124 Elo vs Gen 0 |
 | Gen 2 | Gen 0's games, scored by Stockfish | +129 Elo vs Gen 1 |
-| Gen 3 | Gen 2's games, scored by the whole panel and Lc0 | training soon |
+| Gen 3 | Gen 2's games, scored by the whole panel and Lc0 | Currently in Self play session |
 
 Each match was 400 games at 5,000 nodes per move, so take the exact numbers with a grain of salt.
 For reference, Stockfish 19 is about 3650 on CCRL. If Nexarch ever gets close, I'll submit it to CCRL
