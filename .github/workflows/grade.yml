@@ -37,7 +37,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install tools
-        run: pip install -q numpy chess kaggle
+        run: pip install -q numpy chess kaggle six
       - name: Download engines and positions
         run: |
           kaggle datasets download markthegamer108/nexarch-engines -p . --unzip -q
