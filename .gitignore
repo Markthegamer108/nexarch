@@ -1,0 +1,28 @@
+# build output
+engine/nexarch
+engine/*.exe
+engine/*.obj
+__pycache__/
+*.pyc
+.venv/
+
+# training data and graded data (gigabytes)
+data/
+*.bin
+*.npz
+*.npy
+*.pt
+
+# other engines (GPL/AGPL, never redistributed here, see ENGINES.md)
+engines/
+
+# Kaggle runs: downloaded outputs, pulled sources, generated job bundles
+kaggle-out/
+kaggle-src/
+kaggle/jobs/
+kaggle/after-selfplay.sh
+
+# experiments, logs, local notes
+nets/smoke.*
+*.log
+NOTES.md

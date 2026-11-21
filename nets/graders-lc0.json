@@ -1,0 +1,32 @@
+{
+ "engines": [
+  {
+   "name": "Lc0 0.32.1 BT4",
+   "path": "lc0/build/release/lc0",
+   "nodes": 128,
+   "init": [
+    "setoption name WeightsFile value /tmp/nexarch/bt4.pb.gz",
+    "setoption name Backend value cuda-fp16",
+    "setoption name BackendOptions value gpu={gpu}",
+    "setoption name Threads value 1",
+    "setoption name MinibatchSize value 32",
+    "setoption name SmartPruningFactor value 0"
+   ]
+  }
+ ],
+ "roles": [
+  {
+   "name": "lc0",
+   "categories": [
+    "imbalance",
+    "quiet"
+   ],
+   "nodes": 128,
+   "weight": 2.0,
+   "engines": [
+    "Lc0 0.32.1 BT4"
+   ],
+   "why": "Lc0 BT4 on GPU: sacrifice evaluation + positional understanding (your table)"
+  }
+ ]
+}

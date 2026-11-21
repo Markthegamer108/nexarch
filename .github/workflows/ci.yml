@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  engine:
+    name: engine (${{ matrix.cxx }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        cxx: [g++, clang++]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        working-directory: engine
+        run: |
+          if [ "${{ matrix.cxx }}" = clang++ ]; then EXTRA="LDFLAGS=-fuse-ld=lld"; fi
+          make CXX=${{ matrix.cxx }} ARCH=x86-64-v3 $EXTRA
+
+      - name: Perft (move generation)
+        working-directory: engine
+        run: ./nexarch perftsuite deep
+
+      - name: Bench
+        working-directory: engine
+        run: ./nexarch bench 12 | tail -1
+
+      - name: UCI smoke test
+        working-directory: engine
+        run: |
+          out=$(printf 'uci\nsetoption name EvalFile value ../nets/nexarch-g2.nnue\nisready\nposition startpos moves e2e4\ngo movetime 500\n' | ./nexarch)
+          echo "$out" | tail -3
+          echo "$out" | grep -q '^bestmove '
+
+  training-pipeline:
+    name: self-play -> train -> load
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install CPU PyTorch
+        run: pip install numpy torch --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple
+      - name: Build
+        run: make -C engine ARCH=x86-64-v3
+      - name: Tiny self-play run
+        run: ./engine/nexarch datagen threads=4 games=200 nodes=2000 seed=1 out=ci.bin net=nets/nexarch-g2.nnue
+      - name: Train a small network
+        run: python trainer/train.py --data ci.bin --out ci.nnue --hidden 32 --epochs 2 --batch 4096
+      - name: Engine loads the trained network
+        run: printf 'setoption name EvalFile value ci.nnue\nposition startpos\neval\n' | ./engine/nexarch | grep 'using ci.nnue'

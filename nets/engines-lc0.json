@@ -1,0 +1,17 @@
+{
+ "engines": [
+  {
+   "name": "Lc0 0.32.1 BT4",
+   "path": "lc0/build/release/lc0",
+   "nodes": 128,
+   "init": [
+    "setoption name WeightsFile value bt4.pb.gz",
+    "setoption name Backend value cuda-fp16",
+    "setoption name BackendOptions value gpu={gpu}",
+    "setoption name Threads value 1",
+    "setoption name MinibatchSize value 32",
+    "setoption name SmartPruningFactor value 0"
+   ]
+  }
+ ]
+}

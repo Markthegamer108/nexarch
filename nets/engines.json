@@ -1,0 +1,237 @@
+{
+ "engines": [
+  {
+   "name": "Stockfish 19",
+   "path": "engines/bin/stockfish",
+   "init": [
+    "setoption name Threads value 1",
+    "setoption name Hash value 16"
+   ]
+  },
+  {
+   "name": "Triumviratus 8.0",
+   "path": "engines/bin/triumviratus",
+   "init": [
+    "setoption name Threads value 1",
+    "setoption name Hash value 16"
+   ]
+  },
+  {
+   "name": "Reckless 0.9.0",
+   "path": "engines/bin/reckless",
+   "init": [
+    "setoption name Threads value 1",
+    "setoption name Hash value 16"
+   ]
+  },
+  {
+   "name": "PlentyChess 8.0.0",
+   "path": "engines/bin/plentychess",
+   "init": [
+    "setoption name Threads value 1",
+    "setoption name Hash value 16"
+   ]
+  },
+  {
+   "name": "pawnocchio 2.0.1",
+   "path": "engines/bin/pawnocchio",
+   "init": [
+    "setoption name Threads value 1",
+    "setoption name Hash value 16"
+   ]
+  },
+  {
+   "name": "Coda 0.9.4",
+   "path": "engines/bin/coda",
+   "init": [
+    "setoption name Threads value 1",
+    "setoption name Hash value 16"
+   ]
+  },
+  {
+   "name": "Integral v8",
+   "path": "engines/bin/integral",
+   "init": [
+    "setoption name Threads value 1",
+    "setoption name Hash value 16"
+   ]
+  },
+  {
+   "name": "Cinder 0.6.1",
+   "path": "engines/bin/cinder",
+   "init": [
+    "setoption name Threads value 1",
+    "setoption name Hash value 16"
+   ]
+  },
+  {
+   "name": "Obsidian 16.0",
+   "path": "engines/bin/obsidian",
+   "init": [
+    "setoption name Threads value 1",
+    "setoption name Hash value 16"
+   ]
+  },
+  {
+   "name": "Alexandria 9.1.0",
+   "path": "engines/bin/alexandria",
+   "init": [
+    "setoption name Threads value 1",
+    "setoption name Hash value 16"
+   ]
+  },
+  {
+   "name": "Stormphrax 8.0.0",
+   "path": "engines/bin/stormphrax",
+   "init": [
+    "setoption name Threads value 1",
+    "setoption name Hash value 16"
+   ]
+  },
+  {
+   "name": "Hobbes 3.0",
+   "path": "engines/bin/hobbes",
+   "init": [
+    "setoption name Threads value 1",
+    "setoption name Hash value 16"
+   ]
+  },
+  {
+   "name": "Viridithas 20.0.0",
+   "path": "engines/bin/viridithas",
+   "init": [
+    "setoption name Threads value 1",
+    "setoption name Hash value 16"
+   ]
+  },
+  {
+   "name": "Caissa 2.0",
+   "path": "engines/bin/caissa",
+   "init": [
+    "setoption name Threads value 1",
+    "setoption name Hash value 16"
+   ]
+  },
+  {
+   "name": "Astra 7.0",
+   "path": "engines/bin/astra",
+   "init": [
+    "setoption name Threads value 1",
+    "setoption name Hash value 16"
+   ]
+  },
+  {
+   "name": "Berserk 14",
+   "path": "engines/bin/berserk",
+   "init": [
+    "setoption name Threads value 1",
+    "setoption name Hash value 16"
+   ]
+  },
+  {
+   "name": "Tarnished 6.0",
+   "path": "engines/bin/tarnished",
+   "init": [
+    "setoption name Threads value 1",
+    "setoption name Hash value 16"
+   ]
+  },
+  {
+   "name": "Halogen 16",
+   "path": "engines/bin/halogen",
+   "init": [
+    "setoption name Threads value 1",
+    "setoption name Hash value 16"
+   ]
+  },
+  {
+   "name": "Quanticade Cronus 3.0",
+   "path": "engines/bin/quanticade",
+   "init": [
+    "setoption name Threads value 1",
+    "setoption name Hash value 16"
+   ]
+  },
+  {
+   "name": "Clover 9.1",
+   "path": "engines/bin/clover",
+   "init": [
+    "setoption name Threads value 1",
+    "setoption name Hash value 16"
+   ]
+  },
+  {
+   "name": "PZChessBot 7.1",
+   "path": "engines/bin/pzchessbot",
+   "init": [
+    "setoption name Threads value 1",
+    "setoption name Hash value 16"
+   ]
+  },
+  {
+   "name": "Raphael 4.2.0",
+   "path": "engines/bin/raphael",
+   "init": [
+    "setoption name Threads value 1",
+    "setoption name Hash value 16"
+   ]
+  },
+  {
+   "name": "RubiChess 20240817",
+   "path": "engines/bin/rubichess",
+   "init": [
+    "setoption name Threads value 1",
+    "setoption name Hash value 16"
+   ]
+  },
+  {
+   "name": "Koivisto 9.0",
+   "path": "engines/bin/koivisto",
+   "init": [
+    "setoption name Threads value 1",
+    "setoption name Hash value 16"
+   ]
+  },
+  {
+   "name": "Seer 2.8.0",
+   "path": "engines/bin/seer",
+   "init": [
+    "setoption name Threads value 1",
+    "setoption name Hash value 16"
+   ]
+  },
+  {
+   "name": "Arasan 26.1",
+   "path": "engines/bin/arasan",
+   "init": [
+    "setoption name Threads value 1",
+    "setoption name Hash value 16",
+    "setoption name NNUE file value {dir}/arasanv8-20261005.nnue"
+   ]
+  },
+  {
+   "name": "Renegade 1.3.1",
+   "path": "engines/bin/renegade",
+   "init": [
+    "setoption name Threads value 1",
+    "setoption name Hash value 16"
+   ]
+  },
+  {
+   "name": "Devre 7.0",
+   "path": "engines/bin/devre",
+   "init": [
+    "setoption name Threads value 1",
+    "setoption name Hash value 16"
+   ]
+  },
+  {
+   "name": "Ethereal 14.40 (free, classical eval)",
+   "path": "engines/bin/ethereal",
+   "init": [
+    "setoption name Threads value 1",
+    "setoption name Hash value 16"
+   ]
+  }
+ ]
+}
