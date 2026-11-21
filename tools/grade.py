@@ -200,6 +200,9 @@ def main():
     ap.add_argument("--shard", type=int, default=0)
     ap.add_argument("--shards", type=int, default=1)
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--reverse", action="store_true", help="walk the shard from the end")
+    ap.add_argument("--part", type=int, default=0, help="split the shard further: take every PARTS-th position from PART")
+    ap.add_argument("--parts", type=int, default=1)
     ap.add_argument("--seconds", type=int, default=40000)
     ap.add_argument("--flush-every", type=int, default=100)
     ap.add_argument("--only", default="", help="comma list of categories: only grade positions in them (e.g. for the Lc0 GPU run)")
@@ -238,6 +241,9 @@ def main():
     data = np.concatenate([np.fromfile(f, dtype=RECORD) for f in files])
     print(f"loaded {len(data):,} positions from {files}", flush=True)
     order = np.random.default_rng(42).permutation(len(data))[args.shard::args.shards]
+    if args.reverse:  # grade the shard from the back, so a second runner doesn't repeat a forward one
+        order = order[::-1]
+    order = order[args.part::args.parts]
     if args.limit:
         order = order[:args.limit]
     tmp = args.out + ".tmp"

@@ -1,0 +1,60 @@
+name: Grade self-play for training
+
+# Grades Nexarch's self-play positions with the engine panel (tools/grade.py + nets/graders.json).
+# The graded positions are the training data for the next network.
+# Started by hand only. Engines and data come from private Kaggle datasets (secret KAGGLE_API_TOKEN),
+# so no third-party engine binaries are stored in this repo.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dataset:
+        description: Kaggle dataset with the self-play positions
+        default: markthegamer108/nexarch-g2-full
+      datafile:
+        description: file name inside the dataset
+        default: nexarch-g2-full.bin
+      seconds:
+        description: grading time per job, in seconds
+        default: "19500"
+
+jobs:
+  grade:
+    name: grade shard ${{ matrix.shard }} part ${{ matrix.part }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    strategy:
+      fail-fast: false
+      max-parallel: 16
+      matrix:
+        shard: [0, 1, 2, 3]
+        part: [0, 1, 2, 3]
+    env:
+      KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install tools
+        run: pip install -q numpy chess kaggle
+      - name: Download engines and positions
+        run: |
+          kaggle datasets download markthegamer108/nexarch-engines -p . --unzip -q
+          chmod -R u+x engines/bin engines/real engines/lib
+          kaggle datasets download "${{ inputs.dataset }}" -p data --unzip -q
+          ls engines/bin | wc -l; ls -la data
+      - name: Grade
+        # Kaggle runs the same shards from the front, these jobs walk them from the back (no overlap).
+        run: >
+          python tools/grade.py --config nets/graders.json --data "data/${{ inputs.datafile }}"
+          --out grade-gh-${{ matrix.shard }}-${{ matrix.part }}.bin --workers 4
+          --shard ${{ matrix.shard }} --shards 4 --reverse --part ${{ matrix.part }} --parts 4
+          --seconds ${{ inputs.seconds }} --flush-every 50
+      - name: Report card
+        run: python tools/report_card.py grade-gh-${{ matrix.shard }}-${{ matrix.part }}.bin.meta.npz
+      - uses: actions/upload-artifact@v5
+        with:
+          name: grade-gh-${{ matrix.shard }}-${{ matrix.part }}
+          path: grade-gh-${{ matrix.shard }}-${{ matrix.part }}.bin*
+          retention-days: 30
