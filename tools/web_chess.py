@@ -1,0 +1,862 @@
+#!/usr/bin/env python3
+"""Interactive web chess: play vs Nexarch/any engine, or watch engine matches.
+
+Usage:
+  python tools/web_chess.py [--port 8765] [--host 0.0.0.0] [--engines path/to/engines.json]
+Open http://HOST:PORT in a browser. Binding to 0.0.0.0 exposes it on the LAN;
+for the public internet, forward the port on your router or use a tunnel
+(cloudflared/ngrok) - see the printed instructions.
+"""
+import argparse
+import http.server
+import json
+import os
+import pathlib
+import random
+import shlex
+import shutil
+import socket
+import socketserver
+import sys
+import threading
+import time
+import urllib.request
+
+import chess
+import chess.engine
+import chess.svg
+
+DEFAULT_ENGINES = os.path.expanduser("~/.config/cutechess/engines.json")
+PIECE_DIR = pathlib.Path(__file__).resolve().parent / "pieces"
+PIECE_FILES = {"klt45.svg", "qlt45.svg", "rlt45.svg", "blt45.svg", "nlt45.svg", "plt45.svg",
+               "kdt45.svg", "qdt45.svg", "rdt45.svg", "bdt45.svg", "ndt45.svg", "pdt45.svg"}
+OPENINGS = [
+    "e2e4 e7e5 g1f3 b8c6 f1b5 a7a6", "d2d4 d7d5 c2c4 e7e6 b1c3 g8f6",
+    "e2e4 c7c5 g1f3 d7d6 d2d4 c5d4", "g1f3 d7d5 g2g3 g8f6 f1g2 e7e6",
+]
+
+
+def load_engines(path):
+    try:
+        with open(path) as f:
+            data = json.load(f)
+    except Exception:
+        return []
+    out = []
+    for e in data:
+        opts = {}
+        for o in e.get("options", []):
+            opts[o["name"]] = o.get("value")
+        out.append({
+            "name": e.get("name", "Engine"),
+            "command": e.get("command", ""),
+            "workingDirectory": e.get("workingDirectory", ""),
+            "protocol": e.get("protocol", "uci"),
+            "options": opts,
+        })
+    return out
+
+
+class State:
+    def __init__(self):
+        self.lock = threading.RLock()
+        self.engines = []
+        self.mode = "idle"          # idle | human | match
+        self.fen = chess.STARTING_FEN
+        self.board = chess.Board()
+        self.white_name = ""
+        self.black_name = ""
+        self.white_human = False
+        self.black_human = False
+        self.status = "idle"
+        self.result = ""
+        self.moves = []
+        self.stats = {"w": 0, "d": 0, "l": 0, "done": 0}
+        self.current_game = 0
+        self.total_games = 1
+        self.tc_base = 5.0
+        self.tc_inc = 0.05
+        self.nodes = 0
+        self.clocks = {"w": 5.0, "b": 5.0}
+        self.thinking = False
+        self.stop = threading.Event()
+        self.thread = None
+        self.engine_handles = {}
+        self.last_error = ""
+
+    def snapshot(self):
+        with self.lock:
+            return {
+                "mode": self.mode,
+                "fen": self.fen,
+                "side_to_move": "w" if self.board.turn == chess.WHITE else "b",
+                "white_name": self.white_name,
+                "black_name": self.black_name,
+                "white_human": self.white_human,
+                "black_human": self.black_human,
+                "status": self.status,
+                "result": self.result,
+                "moves": list(self.moves),
+                "stats": dict(self.stats),
+                "current_game": self.current_game,
+                "total_games": self.total_games,
+                "tc_base": self.tc_base,
+                "tc_inc": self.tc_inc,
+                "nodes": self.nodes,
+                "clocks": dict(self.clocks),
+                "thinking": self.thinking,
+                "last_error": self.last_error,
+                "engines": [e["name"] for e in self.engines],
+            }
+
+    def reset_board(self):
+        self.board = chess.Board()
+        self.fen = chess.STARTING_FEN
+        self.moves = []
+        self.result = ""
+        self.clocks = {"w": self.tc_base, "b": self.tc_base}
+
+    def open_engine(self, name):
+        if name in self.engine_handles:
+            return self.engine_handles[name]
+        cfg = next((e for e in self.engines if e["name"] == name), None)
+        if cfg is None or not cfg["command"]:
+            raise RuntimeError(f"unknown engine: {name}")
+        parts = shlex.split(cfg["command"], posix=False)
+        parts[0] = shutil.which(parts[0]) or parts[0]
+        wd = cfg.get("workingDirectory") or None
+        eng = chess.engine.SimpleEngine.popen_uci(parts, timeout=60, cwd=wd)
+        try:
+            eng.configure(cfg["options"])
+        except Exception:
+            pass
+        self.engine_handles[name] = eng
+        return eng
+
+    def close_engines(self):
+        for name, eng in list(self.engine_handles.items()):
+            try:
+                eng.quit()
+            except Exception:
+                try:
+                    eng.close()
+                except Exception:
+                    pass
+        self.engine_handles.clear()
+
+
+STATE = State()
+
+
+def run_engine_move(eng_name, board, limit):
+    eng = STATE.open_engine(eng_name)
+    res = eng.play(board, limit, info=chess.engine.INFO_SCORE)
+    return res
+
+
+def human_turn():
+    with STATE.lock:
+        return (STATE.board.turn == chess.WHITE and STATE.white_human) or \
+               (STATE.board.turn == chess.BLACK and STATE.black_human)
+
+
+def do_engine_turn():
+    # called in background thread
+    with STATE.lock:
+        STATE.thinking = True
+        STATE.last_error = ""
+        turn = STATE.board.turn
+        eng_name = STATE.white_name if turn == chess.WHITE else STATE.black_name
+        if STATE.nodes:
+            limit = chess.engine.Limit(nodes=STATE.nodes)
+        else:
+            limit = chess.engine.Limit(white_clock=STATE.clocks["w"], black_clock=STATE.clocks["b"],
+                                       white_inc=STATE.tc_inc, black_inc=STATE.tc_inc)
+    try:
+        t0 = time.perf_counter()
+        res = run_engine_move(eng_name, STATE.board.copy(), limit)
+        spent = time.perf_counter() - t0
+        with STATE.lock:
+            if not STATE.nodes:
+                key = "w" if turn == chess.WHITE else "b"
+                STATE.clocks[key] -= spent
+                if STATE.clocks[key] < 0:
+                    STATE.result = "0-1" if turn == chess.WHITE else "1-0"
+                    STATE.status = "finished"
+                    STATE.thinking = False
+                    return
+                STATE.clocks[key] += STATE.tc_inc
+            if res.move is None:
+                STATE.thinking = False
+                return
+            san = STATE.board.san(res.move)
+            STATE.board.push(res.move)
+            STATE.fen = STATE.board.fen()
+            STATE.moves.append(san)
+            STATE.moves = STATE.moves[-40:]
+            # check game over
+            if STATE.board.is_game_over(claim_draw=True):
+                outcome = STATE.board.outcome(claim_draw=True)
+                r = outcome.result() if outcome else "1/2-1/2"
+                STATE.result = r
+                STATE.status = "finished"
+                # update stats for single human games? only in match mode
+            STATE.thinking = False
+    except Exception as e:
+        with STATE.lock:
+            STATE.last_error = str(e)
+            STATE.thinking = False
+
+
+def run_match():
+    STATE.stop.clear()
+    openings = list(OPENINGS)
+    random.Random(1).shuffle(openings)
+    while not STATE.stop.is_set() and STATE.current_game < STATE.total_games:
+        with STATE.lock:
+            STATE.current_game += 1
+            g = STATE.current_game
+            STATE.reset_board()
+            # apply opening
+            try:
+                b = chess.Board()
+                for mv in openings[(g // 2) % len(openings)].split():
+                    b.push_uci(mv)
+                STATE.board = b
+                STATE.fen = b.fen()
+                STATE.moves = openings[(g // 2) % len(openings)].split()
+            except Exception:
+                pass
+            STATE.status = "playing"
+            STATE.result = ""
+        # play game
+        a_white = (STATE.current_game % 2 == 1)
+        while not STATE.stop.is_set():
+            with STATE.lock:
+                if STATE.board.is_game_over(claim_draw=True) or STATE.board.ply() >= 500:
+                    break
+                turn = STATE.board.turn
+                is_white_engine = (turn == chess.WHITE) != (not a_white and STATE.white_human is False)
+            # determine if current mover is engine
+            with STATE.lock:
+                white_is_engine = not STATE.white_human
+                black_is_engine = not STATE.black_human
+                mover_engine = (turn == chess.WHITE and white_is_engine) or (turn == chess.BLACK and black_is_engine)
+            if not mover_engine:
+                # human to move; wait
+                time.sleep(0.2)
+                continue
+            # engine move
+            with STATE.lock:
+                STATE.thinking = True
+            try:
+                if STATE.nodes:
+                    limit = chess.engine.Limit(nodes=STATE.nodes)
+                else:
+                    with STATE.lock:
+                        limit = chess.engine.Limit(white_clock=STATE.clocks["w"], black_clock=STATE.clocks["b"],
+                                                   white_inc=STATE.tc_inc, black_inc=STATE.tc_inc)
+                with STATE.lock:
+                    eng_name = STATE.white_name if turn == chess.WHITE else STATE.black_name
+                    board_copy = STATE.board.copy()
+                    t0 = time.perf_counter()
+                res = run_engine_move(eng_name, board_copy, limit)
+                spent = time.perf_counter() - t0
+                with STATE.lock:
+                    if not STATE.nodes:
+                        key = "w" if turn == chess.WHITE else "b"
+                        STATE.clocks[key] -= spent
+                        if STATE.clocks[key] < 0:
+                            STATE.result = "0-1" if turn == chess.WHITE else "1-0"
+                            STATE.status = "finished"
+                            STATE.thinking = False
+                            break
+                        STATE.clocks[key] += STATE.tc_inc
+                    if res.move is None:
+                        STATE.thinking = False
+                        break
+                    san = STATE.board.san(res.move)
+                    STATE.board.push(res.move)
+                    STATE.fen = STATE.board.fen()
+                    STATE.moves.append(san)
+                    STATE.moves = STATE.moves[-40:]
+                    STATE.thinking = False
+            except Exception as e:
+                with STATE.lock:
+                    STATE.last_error = str(e)
+                    STATE.thinking = False
+                break
+            time.sleep(0.05)
+        # game finished
+        with STATE.lock:
+            if not STATE.result:
+                outcome = STATE.board.outcome(claim_draw=True)
+                STATE.result = (outcome.result() if outcome else "1/2-1/2")
+            # update stats (A = white's perspective? treat white as A)
+            r = STATE.result
+            a_score = {"1-0": 1.0, "0-1": 0.0}.get(r, 0.5)
+            if a_score == 1:
+                STATE.stats["w"] += 1
+            elif a_score == 0:
+                STATE.stats["l"] += 1
+            else:
+                STATE.stats["d"] += 1
+            STATE.stats["done"] += 1
+            STATE.status = "between_games"
+        time.sleep(1.5)
+    with STATE.lock:
+        STATE.status = "finished"
+        STATE.mode = "idle"
+
+
+HTML = r"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nexarch Chess</title>
+<style>
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:#a8a8a8;color:#1a1a1a;font:13px "Segoe UI",Tahoma,Arial,sans-serif;display:flex;justify-content:center;align-items:flex-start;padding:18px}
+.app{width:100%;max-width:920px;background:#f0f0f0;border:1px solid #777;box-shadow:0 6px 24px rgba(0,0,0,.35);display:flex;flex-direction:column;min-height:600px}
+.titlebar{background:linear-gradient(#f7f7f7,#e4e4e4);border-bottom:1px solid #b5b5b5;padding:5px 10px;font-weight:600;font-size:13px;display:flex;justify-content:space-between;align-items:center}
+.winbtns{display:flex;gap:4px}
+.winbtns span{width:16px;height:14px;border:1px solid #999;background:linear-gradient(#fbfbfb,#dcdcdc);font-size:9px;line-height:11px;text-align:center;color:#333}
+.menubar{display:flex;background:#ececec;border-bottom:1px solid #c4c4c4;padding:0 4px;user-select:none}
+.menubar span{padding:4px 9px;font-size:12px;cursor:default}
+.menubar span:hover{background:#dcdcdc}
+.toolbar{display:flex;align-items:center;gap:4px;padding:5px 6px;background:linear-gradient(#fafafa,#e6e6e6);border-bottom:1px solid #c4c4c4}
+.tb{border:1px solid #a8a8a8;background:linear-gradient(#fdfdfd,#e3e3e3);padding:4px 10px;font:12px "Segoe UI",Tahoma,sans-serif;color:#111;cursor:pointer;border-radius:2px}
+.tb:hover{background:linear-gradient(#fff,#ededed);border-color:#888}
+.tb:active{background:#dcdcdc;border-color:#777}
+.tb.default{font-weight:600}
+.sep{width:1px;height:22px;background:#c8c8c8;margin:0 6px}
+.gameinfo{margin-left:auto;font-size:11px;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:420px}
+.main{display:grid;grid-template-columns:1fr 268px;flex:1;min-height:0}
+.boardarea{padding:14px;display:flex;flex-direction:column;justify-content:center;background:#f0f0f0}
+.player{display:flex;justify-content:space-between;align-items:center;background:#e9e9e9;border:1px solid #bdbdbd;padding:5px 9px;font-size:13px}
+.player .name{font-weight:600;display:flex;align-items:center;gap:6px}
+.player .clock{font:13px "Consolas",monospace;background:#fff;border:1px solid #b5b5b5;padding:1px 7px;min-width:58px;text-align:right}
+.sw{width:10px;height:10px;border:1px solid #666;display:inline-block}
+.sw.black{background:#1a1a1a}
+.sw.white{background:#fff}
+.board{display:grid;grid-template-columns:repeat(8,1fr);width:100%;aspect-ratio:1/1;border:1px solid #8a8a8a;margin:1px 0}
+.sq{display:flex;align-items:center;justify-content:center;font-size:clamp(20px,4.6vw,36px);line-height:1;cursor:pointer;user-select:none}
+.sq.light{background:#f0d9b5}.sq.dark{background:#b58863}
+.sq.sel{box-shadow:inset 0 0 0 3px #2f6fb0}
+.piece{width:88%;height:88%;object-fit:contain;pointer-events:none;display:block}
+.dock{background:#f0f0f0;border-left:1px solid #bdbdbd;display:flex;flex-direction:column;min-height:0}
+.tabstrip{display:flex;background:#e4e4e4;border-bottom:1px solid #bdbdbd;padding-top:3px}
+.tab{padding:5px 12px;font-size:12px;border:1px solid transparent;border-bottom:none;cursor:default;color:#555}
+.tab.active{background:#f7f7f7;border-color:#bdbdbd;color:#111;margin-bottom:-1px;position:relative;top:1px}
+.moves{flex:1;background:#fff;margin:8px;border:1px solid #bdbdbd;overflow:auto;padding:6px;font:12px/1.7 "Consolas",monospace;white-space:pre-wrap}
+.dockinfo{margin:0 8px 8px;background:#fff;border:1px solid #bdbdbd;padding:7px 9px;font-size:12px}
+.dockinfo div{display:flex;justify-content:space-between;padding:2px 0}
+.dockinfo b{font-weight:600;color:#555}
+.statusbar{display:flex;gap:16px;border-top:1px solid #b5b5b5;background:#ececec;padding:4px 9px;font-size:12px;color:#333}
+.statusbar .grow{flex:1}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.28);display:none;align-items:center;justify-content:center;z-index:10}
+.modal.open{display:flex}
+.dialog{width:360px;background:#f0f0f0;border:1px solid #777;box-shadow:0 8px 26px rgba(0,0,0,.4)}
+.dialogTitle{background:linear-gradient(#f7f7f7,#e4e4e4);border-bottom:1px solid #b5b5b5;padding:6px 10px;font-weight:600;font-size:13px}
+.dialogBody{padding:14px}
+.dialogBody label{display:block;margin-bottom:10px;font-size:12px;color:#444}
+.dialogBody label span{display:block;margin-bottom:3px}
+.dialogBody select,.dialogBody input{width:100%;padding:5px;border:1px solid #a8a8a8;background:#fff;font:13px "Segoe UI",Tahoma,sans-serif}
+.dialogRow{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.dialogRow2{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.dialogButtons{display:flex;justify-content:flex-end;gap:8px;padding:10px 14px;border-top:1px solid #c4c4c4;background:#ececec}
+.dialogButtons button{min-width:78px}
+.error{color:#9b1c1c;font-size:12px;margin-top:8px}
+.credit{color:#777;font-size:11px}
+@media(max-width:760px){
+  body{padding:0;touch-action:manipulation}
+  .app{border:none;min-height:0;max-width:100%}
+  .titlebar{padding:6px 10px}
+  .winbtns{display:none}
+  .menubar{overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch}
+  .menubar span{flex:0 0 auto}
+  .toolbar{flex-wrap:wrap;gap:4px}
+  .gameinfo{display:none}
+  .main{grid-template-columns:1fr;flex:none}
+  .boardarea{padding:8px;justify-content:flex-start}
+  .player{padding:4px 7px;font-size:12px}
+  .player .clock{min-width:50px;font-size:12px}
+  .board{width:100%;max-height:calc(100vw - 16px);margin:6px auto}
+  .sq{font-size:clamp(22px,9vw,40px);touch-action:manipulation}
+  .dock{border-left:none;border-top:1px solid #bdbdbd;max-height:210px}
+  .moves{margin:6px;font-size:11px}
+  .dockinfo{margin:0 6px 6px}
+  .statusbar{font-size:11px;gap:8px;flex-wrap:wrap}
+  .credit{display:none}
+  .dialog{width:calc(100vw - 24px);max-width:360px}
+}
+@media(max-width:420px){
+  .menubar span:nth-child(n+4){display:none}
+  .tb{padding:4px 8px;font-size:11px}
+  .board{max-height:calc(100vw - 12px)}
+}
+</style>
+</head><body>
+<div class="app">
+  <div class="titlebar"><span>Nexarch Chess</span><span class="winbtns"><span>&#8211;</span><span>&#9633;</span><span>&#10005;</span></span></div>
+  <div class="menubar"><span>File</span><span>Game</span><span>Tournament</span><span>View</span><span>Tools</span><span>Help</span></div>
+  <div class="toolbar">
+    <button class="tb default" id="newGameBtn">New Game</button>
+    <button class="tb" id="restartBtn">Restart</button>
+    <button class="tb" id="stopBtn">Stop</button>
+    <span class="sep"></span>
+    <span class="gameinfo" id="gameInfo">No game</span>
+  </div>
+  <div class="main">
+    <div class="boardarea">
+      <div class="player"><span class="name"><span class="sw black"></span><span id="blackName">Black</span></span><span class="clock" id="blackClock">5:00.0</span></div>
+      <div class="board" id="board"></div>
+      <div class="player"><span class="name"><span class="sw white"></span><span id="whiteName">White</span></span><span class="clock" id="whiteClock">5:00.0</span></div>
+    </div>
+    <div class="dock">
+      <div class="tabstrip"><span class="tab active">Moves</span><span class="tab">Info</span></div>
+      <div class="moves" id="moves">No moves yet.</div>
+      <div class="dockinfo">
+        <div><b>Status</b><span id="statusText">Idle</span></div>
+        <div><b>Result</b><span id="result">-</span></div>
+        <div><b>Score</b><span id="score">+0 =0 -0</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="statusbar"><span class="grow" id="statusMessage">Ready</span><span id="enginesLabel">-</span><span class="credit">Pieces: Cburnett, CC BY-SA 3.0</span></div>
+</div>
+
+<div class="modal" id="newGameModal">
+  <div class="dialog">
+    <div class="dialogTitle">New Game</div>
+    <div class="dialogBody">
+      <label><span>White</span><select id="whiteSel"></select></label>
+      <label><span>Black</span><select id="blackSel"></select></label>
+      <div class="dialogRow">
+        <label><span>Time control</span><input id="tc" value="5+0.05"></label>
+        <label><span>Nodes</span><input id="nodes" value="0"></label>
+      </div>
+      <label><span>Games</span><input id="games" value="1"></label>
+      <div class="error" id="errRow" style="display:none"><span id="err"></span></div>
+    </div>
+    <div class="dialogButtons">
+      <button class="tb" id="cancelBtn">Cancel</button>
+      <button class="tb default" id="okBtn">OK</button>
+    </div>
+  </div>
+</div>
+<script>
+var UNICODE = {K:"\u2654",Q:"\u2655",R:"\u2656",B:"\u2657",N:"\u2658",P:"\u2659",k:"\u265A",q:"\u265B",r:"\u265C",b:"\u265D",n:"\u265E",p:"\u265F"};
+var PIECE_FILE = {K:"klt45",Q:"qlt45",R:"rlt45",B:"blt45",N:"nlt45",P:"plt45",k:"kdt45",q:"qdt45",r:"rdt45",b:"bdt45",n:"ndt45",p:"pdt45"};
+var STATE = {};
+var selected = null;
+var selectedPiece = null;
+var lastFen = "";
+var sideHuman = {w:false,b:false};
+
+function parseFen(fen){
+  var rows=fen.split(" ")[0].split("/"), out={};
+  for(var r=0;r<8;r++){var f=0;for(var i=0;i<rows[r].length;i++){var c=rows[r][i];
+    if(c>="1"&&c<="8"){f+=parseInt(c);}else{out["abcdefgh"[f]+(8-r)]=c;f++;}}}
+  return out;
+}
+function squareName(row,col){return "abcdefgh"[col]+(8-row);}
+function renderBoard(fen){
+  var board=document.getElementById("board"), pieces=parseFen(fen);
+  board.innerHTML="";
+  for(var row=0;row<8;row++)for(var col=0;col<8;col++){
+    var name=squareName(row,col), d=document.createElement("div");
+    d.className="sq "+((row+col)%2===0?"light":"dark");
+    d.dataset.square=name;
+    if(selected&&name===selected)d.className+=" sel";
+    var p=pieces[name];
+    if(p){var s=document.createElement("img");s.className="piece";s.alt=UNICODE[p]||"";s.src="/pieces/"+(PIECE_FILE[p]||"")+".svg";d.appendChild(s);}
+    d.onclick=onSquareClick;
+    board.appendChild(d);
+  }
+  lastFen=fen;
+}
+function onSquareClick(ev){
+  var sq=ev.currentTarget.dataset.square;
+  if(!sq)return;
+  if(STATE.thinking||STATE.status!=="playing"||!sideHuman[STATE.side_to_move])return;
+  if(!selected){
+    var pieces=parseFen(STATE.fen), p=pieces[sq];
+    if(!p)return;
+    var isWhite=p===p.toUpperCase();
+    if((STATE.side_to_move==="w")!==isWhite)return;
+    selected=sq; selectedPiece=p; renderBoard(STATE.fen);
+  }else{
+    var from=selected, piece=selectedPiece; selected=null; selectedPiece=null;
+    var uci=from+sq;
+    if((piece==="P"&&sq[1]==="8")||(piece==="p"&&sq[1]==="1"))uci+="q";
+    sendMove(uci);
+  }
+}
+function sendMove(uci){
+  fetch("/move",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({uci:uci})})
+    .then(function(r){return r.json();})
+    .then(function(d){if(d.error){showError(d.error);selected=null;refresh();return;}if(d.state)applyState(d.state);})
+    .catch(function(){showError("Network error");});
+}
+function showError(msg){document.getElementById("err").textContent=msg;document.getElementById("errRow").style.display="block";}
+function fmtClock(t){t=Math.max(0,t);var m=Math.floor(t/60),s=t-m*60;return m+":"+(s<10?"0":"")+s.toFixed(1);}
+function fmtMoves(moves){
+  if(!moves||!moves.length)return "No moves yet.";
+  var out=[];
+  for(var i=0;i<moves.length;i+=2){
+    out.push((i/2+1)+". "+moves[i]+(moves[i+1]?" "+moves[i+1]:""));
+  }
+  return out.join("\n");
+}
+function applyState(s){
+  STATE=s;
+  sideHuman={w:!!s.white_human,b:!!s.black_human};
+  var st=s.status==="playing"?(s.thinking?"Thinking...":"Playing"):"Idle";
+  document.getElementById("statusText").textContent=st;
+  document.getElementById("statusMessage").textContent=st;
+  document.getElementById("whiteName").textContent=s.white_name||"White";
+  document.getElementById("blackName").textContent=s.black_name||"Black";
+  document.getElementById("whiteClock").textContent=fmtClock(s.clocks.w);
+  document.getElementById("blackClock").textContent=fmtClock(s.clocks.b);
+  document.getElementById("score").textContent="+"+s.stats.w+" = "+s.stats.d+" - "+s.stats.l;
+  document.getElementById("result").textContent=s.result||"-";
+  document.getElementById("moves").textContent=fmtMoves(s.moves);
+  document.getElementById("gameInfo").textContent=s.white_name&&s.black_name?(s.white_name+" vs "+s.black_name+(s.nodes?" ("+s.nodes+" nodes)":" ("+s.tc_base+"s+"+s.tc_inc+"s)")):"No game";
+  document.getElementById("enginesLabel").textContent="Engines: "+((s.engines||[]).join(", ")||"-");
+  var er=document.getElementById("errRow");
+  if(s.last_error){document.getElementById("err").textContent=s.last_error;er.style.display="block";}else{er.style.display="none";}
+  if(s.fen!==lastFen){selected=null;selectedPiece=null;renderBoard(s.fen);}
+}
+function refresh(){fetch("/state.json?"+Date.now()).then(function(r){return r.json();}).then(applyState).catch(function(){});}
+function populate(){
+  fetch("/state.json").then(function(r){return r.json();}).then(function(s){
+    var w=document.getElementById("whiteSel"),b=document.getElementById("blackSel");
+    w.innerHTML="";b.innerHTML="";
+    var h=document.createElement("option");h.value="__human__";h.textContent="Human";
+    w.appendChild(h.cloneNode(true));b.appendChild(h);
+    (s.engines||[]).forEach(function(n){
+      var a=document.createElement("option");a.value=n;a.textContent=n;w.appendChild(a);
+      var c=document.createElement("option");c.value=n;c.textContent=n;b.appendChild(c);
+    });
+    w.value="__human__";
+    b.value=(s.engines&&s.engines.length)?s.engines[0]:"__human__";
+    applyState(s);
+  });
+}
+function openDialog(){document.getElementById("newGameModal").classList.add("open");}
+function closeDialog(){document.getElementById("newGameModal").classList.remove("open");}
+function startGame(){
+  var body={
+    white:document.getElementById("whiteSel").value,
+    black:document.getElementById("blackSel").value,
+    tc:document.getElementById("tc").value,
+    nodes:parseInt(document.getElementById("nodes").value)||0,
+    games:parseInt(document.getElementById("games").value)||1
+  };
+  fetch("/start",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})
+    .then(function(r){return r.json();})
+    .then(function(d){if(d.error)showError(d.error);if(d.state)applyState(d.state);closeDialog();})
+    .catch(function(){showError("Network error");});
+}
+function restartGame(){fetch("/restart",{method:"POST"}).then(function(){refresh();});}
+function stopGame(){fetch("/stop",{method:"POST"}).then(function(){refresh();});}
+document.getElementById("newGameBtn").onclick=openDialog;
+document.getElementById("okBtn").onclick=startGame;
+document.getElementById("cancelBtn").onclick=closeDialog;
+document.getElementById("restartBtn").onclick=restartGame;
+document.getElementById("stopBtn").onclick=stopGame;
+document.getElementById("newGameModal").onclick=function(e){if(e.target===this)closeDialog();};
+renderBoard("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+populate();
+setInterval(refresh,800);
+</script>
+</body></html>"""
+
+
+def _engine_respond():
+    with STATE.lock:
+        turn = STATE.board.turn
+        opp_engine = None
+        if turn == chess.WHITE and not STATE.white_human:
+            opp_engine = STATE.white_name
+        if turn == chess.BLACK and not STATE.black_human:
+            opp_engine = STATE.black_name
+        game_over = STATE.board.is_game_over(claim_draw=True)
+    if not opp_engine or game_over:
+        return
+    STATE.thinking = True
+    def bg():
+        try:
+            with STATE.lock:
+                if STATE.nodes:
+                    limit = chess.engine.Limit(nodes=STATE.nodes)
+                else:
+                    limit = chess.engine.Limit(white_clock=STATE.clocks["w"], black_clock=STATE.clocks["b"],
+                                               white_inc=STATE.tc_inc, black_inc=STATE.tc_inc)
+                board_copy = STATE.board.copy()
+                eng_side = STATE.board.turn
+            t0 = time.perf_counter()
+            res = run_engine_move(opp_engine, board_copy, limit)
+            spent = time.perf_counter() - t0
+            with STATE.lock:
+                key = "w" if eng_side == chess.WHITE else "b"
+                if not STATE.nodes:
+                    STATE.clocks[key] -= spent
+                    if STATE.clocks[key] < 0:
+                        STATE.result = "0-1" if eng_side == chess.WHITE else "1-0"
+                        STATE.status = "finished"
+                        STATE.thinking = False
+                        return
+                    STATE.clocks[key] += STATE.tc_inc
+                if res.move is not None and res.move in STATE.board.legal_moves:
+                    san = STATE.board.san(res.move)
+                    STATE.board.push(res.move)
+                    STATE.fen = STATE.board.fen()
+                    STATE.moves.append(san)
+                    STATE.moves = STATE.moves[-40:]
+                if STATE.board.is_game_over(claim_draw=True):
+                    outcome = STATE.board.outcome(claim_draw=True)
+                    STATE.result = (outcome.result() if outcome else "1/2-1/2")
+                    STATE.status = "finished"
+        except Exception as e:
+            with STATE.lock:
+                STATE.last_error = str(e)
+        finally:
+            with STATE.lock:
+                STATE.thinking = False
+    threading.Thread(target=bg, daemon=True).start()
+
+
+def make_handler():
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            path = self.path.split("?", 1)[0]
+            if path == "/" or path.startswith("/index"):
+                data = HTML.encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+            elif path.startswith("/pieces/"):
+                name = path.rsplit("/", 1)[-1]
+                if name in PIECE_FILES:
+                    data = (PIECE_DIR / name).read_bytes()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "image/svg+xml")
+                    self.send_header("Cache-Control", "max-age=86400")
+                    self.end_headers()
+                    self.wfile.write(data)
+                else:
+                    self.send_response(404)
+                    self.end_headers()
+            elif self.path.startswith("/state.json"):
+                data = json.dumps(STATE.snapshot()).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(data)
+            elif self.path.startswith("/board.svg"):
+                with STATE.lock:
+                    fen = STATE.fen
+                try:
+                    svg = chess.svg.board(chess.Board(fen), size=420)
+                except Exception:
+                    svg = ""
+                data = svg.encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "image/svg+xml")
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(data)
+            else:
+                self.send_response(404)
+                self.end_headers()
+
+        def do_POST(self):
+            length = int(self.headers.get("Content-Length", 0))
+            raw = self.rfile.read(length) if length else b"{}"
+            try:
+                body = json.loads(raw or b"{}")
+            except Exception:
+                body = {}
+            if self.path == "/move":
+                uci = (body.get("uci") or "").strip()
+                with STATE.lock:
+                    try:
+                        mv = chess.Move.from_uci(uci)
+                    except Exception:
+                        mv = None
+                    if mv is None or mv not in STATE.board.legal_moves:
+                        resp = {"error": "illegal move", "state": STATE.snapshot()}
+                        self._json(resp, 400)
+                        return
+                    san = STATE.board.san(mv)
+                    STATE.board.push(mv)
+                    STATE.fen = STATE.board.fen()
+                    STATE.moves.append(san)
+                    STATE.moves = STATE.moves[-40:]
+                    STATE.last_error = ""
+                    opp_engine = None
+                    turn = STATE.board.turn
+                    if turn == chess.WHITE and not STATE.white_human:
+                        opp_engine = STATE.white_name
+                    if turn == chess.BLACK and not STATE.black_human:
+                        opp_engine = STATE.black_name
+                    game_over = STATE.board.is_game_over(claim_draw=True)
+                if opp_engine and not game_over:
+                    _engine_respond()
+                with STATE.lock:
+                    if STATE.board.is_game_over(claim_draw=True) and not STATE.result:
+                        outcome = STATE.board.outcome(claim_draw=True)
+                        STATE.result = (outcome.result() if outcome else "1/2-1/2")
+                        STATE.status = "finished"
+                    snap = STATE.snapshot()
+                self._json({"ok": True, "state": snap})
+            elif self.path == "/start":
+                white = body.get("white")
+                black = body.get("black")
+                tc = body.get("tc", "5+0.05")
+                nodes = int(body.get("nodes", 0) or 0)
+                games = int(body.get("games", 1) or 1)
+                # stop any running
+                STATE.stop.set()
+                if STATE.thread and STATE.thread.is_alive():
+                    STATE.thread.join(timeout=5)
+                STATE.close_engines()
+                STATE.stop.clear()
+                STATE.white_name = "Human" if white == "__human__" else white
+                STATE.black_name = "Human" if black == "__human__" else black
+                STATE.white_human = (white == "__human__")
+                STATE.black_human = (black == "__human__")
+                STATE.nodes = nodes
+                STATE.total_games = max(1, games)
+                STATE.current_game = 0
+                STATE.stats = {"w": 0, "d": 0, "l": 0, "done": 0}
+                # parse tc
+                base, _, inc = str(tc).partition("+")
+                try:
+                    STATE.tc_base = float(base)
+                except Exception:
+                    STATE.tc_base = 5.0
+                try:
+                    STATE.tc_inc = float(inc) if inc else 0.0
+                except Exception:
+                    STATE.tc_inc = 0.0
+                STATE.reset_board()
+                STATE.status = "playing"
+                STATE.result = ""
+                STATE.mode = "match" if (not STATE.white_human or not STATE.black_human) and games > 1 else "human"
+                if STATE.white_human and STATE.black_human:
+                    STATE.mode = "human"
+                # if both human, just idle board
+                if STATE.white_human and STATE.black_human:
+                    STATE.mode = "idle"
+                    STATE.status = "idle"
+                    self._json({"ok": True, "state": STATE.snapshot()})
+                    return
+                # start background
+                if STATE.white_human or STATE.black_human:
+                    # single human game; engine will move if it goes first
+                    STATE.mode = "human"
+                    STATE.total_games = 1
+                    STATE.thread = None
+                    # if engine is white, trigger first move
+                    if not STATE.white_human:
+                        def first():
+                            time.sleep(0.3)
+                            _engine_respond()
+                        threading.Thread(target=first, daemon=True).start()
+                    self._json({"ok": True, "state": STATE.snapshot()})
+                    return
+                # engine vs engine match
+                STATE.mode = "match"
+                STATE.thread = threading.Thread(target=run_match, daemon=True)
+                STATE.thread.start()
+                self._json({"ok": True, "state": STATE.snapshot()})
+            elif self.path == "/restart":
+                STATE.stop.set()
+                if STATE.thread and STATE.thread.is_alive():
+                    STATE.thread.join(timeout=5)
+                STATE.close_engines()
+                STATE.stop.clear()
+                STATE.reset_board()
+                STATE.status = "idle"
+                STATE.result = ""
+                STATE.mode = "idle"
+                STATE.current_game = 0
+                self._json({"ok": True, "state": STATE.snapshot()})
+            elif self.path == "/stop":
+                STATE.stop.set()
+                self._json({"ok": True, "state": STATE.snapshot()})
+            else:
+                self.send_response(404)
+                self.end_headers()
+
+        def _json(self, obj, code=200):
+            data = json.dumps(obj).encode()
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(data)
+
+        def log_message(self, *a):
+            pass
+
+    return Handler
+
+
+def public_ip():
+    try:
+        return urllib.request.urlopen("https://api.ipify.org", timeout=5).read().decode().strip()
+    except Exception:
+        return None
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--host", default="0.0.0.0")
+    ap.add_argument("--port", type=int, default=8765)
+    ap.add_argument("--engines", default=DEFAULT_ENGINES)
+    args = ap.parse_args()
+
+    STATE.engines = load_engines(args.engines)
+    if not STATE.engines:
+        print("No engines loaded; check --engines path", file=sys.stderr)
+
+    Handler = make_handler()
+    httpd = http.server.ThreadingHTTPServer((args.host, args.port), Handler)
+    httpd.allow_reuse_address = True
+    print(f"Web Chess listening on http://{args.host}:{args.port}/")
+    # LAN IP
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        lan = s.getsockname()[0]
+        s.close()
+        print(f"LAN access:  http://{lan}:{args.port}/")
+    except Exception:
+        pass
+    pip = public_ip()
+    if pip:
+        print(f"Public IP:   {pip}  (needs port forwarding on your router for port {args.port})")
+    print("Engines:", ", ".join(e["name"] for e in STATE.engines) or "(none)")
+    print("For internet access without port forwarding, run one of:")
+    print("  cloudflared tunnel --url http://localhost:%d" % args.port)
+    print("  ngrok http %d" % args.port)
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        STATE.stop.set()
+        STATE.close_engines()
+        httpd.server_close()
+
+
+if __name__ == "__main__":
+    main()

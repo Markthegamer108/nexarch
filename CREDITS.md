@@ -69,6 +69,11 @@ programs, and none of their code is part of Nexarch. What each one judges, and i
   by Niklas Fiekas, [Apache Arrow](https://arrow.apache.org/) (pyarrow), [Zstandard](https://github.com/facebook/zstd)
   and the [Kaggle CLI](https://github.com/Kaggle/kaggle-cli).
 
+## Interface
+
+- The Cburnett chess piece SVG set (CC BY-SA 3.0), via Wikimedia Commons, for the web board's pieces
+  (`tools/pieces`).
+
 ## Ideas
 
 - NNUE, invented by Yu Nasu for shogi and brought to chess by the Stockfish project.
