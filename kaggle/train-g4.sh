@@ -40,20 +40,22 @@ train() {
 ( train "${B[0]}" 1 "${B[1]}" "${B[2]}" "${B[3]}" ) &
 wait
 
-PICK=()
-for name in g4-a g4-b; do
-  [ -f "$OUT/$name.nnue" ] || continue
-  echo "$name vs Gen 3, $GAMES games at $MOVETIME ms per move: $(./engine/nexarch match a="$OUT/$name.nnue" b="$G3N" \
-    games="$GAMES" movetime="$MOVETIME" threads="$CPUS" seed=777 | tee "$OUT/gauntlet-$name.txt" | tail -1)"
-  PICK+=("$name" "$OUT/gauntlet-$name.txt" "$OUT/$name.nnue")
-done
-[ ${#PICK[@]} -gt 0 ] || { echo "no candidate survived training"; exit 1; }
-python trainer/pick_best.py "$OUT/nexarch-g4.nnue" "${PICK[@]}" | tee "$OUT/pick.txt" || exit 1
+[ -f "$OUT/g4-a.nnue" ] || [ -f "$OUT/g4-b.nnue" ] || { echo "no candidate survived training"; exit 1; }
+if [ "$GAMES" -gt 0 ]; then
+  PICK=()
+  for name in g4-a g4-b; do
+    [ -f "$OUT/$name.nnue" ] || continue
+    echo "$name vs Gen 3, $GAMES games at $MOVETIME ms per move: $(./engine/nexarch match a="$OUT/$name.nnue" b="$G3N" \
+      games="$GAMES" movetime="$MOVETIME" threads="$CPUS" seed=777 | tee "$OUT/gauntlet-$name.txt" | tail -1)"
+    PICK+=("$name" "$OUT/gauntlet-$name.txt" "$OUT/$name.nnue")
+  done
+  python trainer/pick_best.py "$OUT/nexarch-g4.nnue" "${PICK[@]}" | tee "$OUT/pick.txt" || exit 1
+else
+  echo "gauntlet and confirmation left for the CPU run"
+fi
 if [ "$FINAL_GAMES" -gt 0 ]; then
   ./engine/nexarch match a="$OUT/nexarch-g4.nnue" b="$G3N" games="$FINAL_GAMES" movetime="$MOVETIME" threads="$CPUS" \
     seed=20261124 | tee "$OUT/vs-g3.txt" | tail -1
   ./engine/nexarch match a="$OUT/nexarch-g4.nnue" b=nets/nexarch-g2.nnue games="$FINAL_GAMES" movetime="$MOVETIME" \
     threads="$CPUS" seed=20261125 | tee "$OUT/vs-g2.txt" | tail -1
-else
-  echo "confirmation matches left for a CPU run"
 fi
