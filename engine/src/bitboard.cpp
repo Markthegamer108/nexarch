@@ -29,7 +29,6 @@ u64 slide(int sq, u64 occ, const int (*dirs)[2]) {
   return attacks;
 }
 
-// Finds a magic multiplier for every square by trial and fills its slice of the attack table.
 void init_magics(Magic* magics, u64* table, const int (*dirs)[2], Rng& rng) {
   static u64 occupancy[4096], reference[4096];
   static int epoch[4096];
@@ -69,7 +68,7 @@ void init_magics(Magic* magics, u64* table, const int (*dirs)[2], Rng& rng) {
   }
 }
 
-}  // namespace
+}
 
 void init_bitboards() {
   constexpr int KNIGHT_STEPS[8][2] = {{1, 2}, {2, 1}, {2, -1}, {1, -2}, {-1, -2}, {-2, -1}, {-2, 1}, {-1, 2}};

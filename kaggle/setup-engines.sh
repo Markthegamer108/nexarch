@@ -1,5 +1,4 @@
 #!/bin/bash
-# Unpack the nexarch-engines dataset into ./engines (works whether Kaggle kept the tarball or extracted it).
 set -e
 T=$(find /kaggle/input -type f -name 'nexarch-engines.tar.gz' -print -quit)
 if [ -n "$T" ]; then

@@ -1,5 +1,3 @@
-// Alpha-beta search: iterative deepening, PVS, transposition table, quiescence, null-move/futility/LMR pruning,
-// singular extensions and learned move-ordering tables (butterfly, continuation, capture and correction history).
 #pragma once
 
 #include <atomic>
@@ -11,10 +9,10 @@
 
 struct Limits {
   int depth = MAX_PLY - 1;
-  u64 nodes = 0;       // hard node limit (0 = none)
-  u64 soft_nodes = 0;  // finish the current iteration, then stop once this many nodes are searched
-  i64 soft_ms = 0;     // don't start a new iteration after this much time (scaled by best-move stability)
-  i64 hard_ms = 0;     // abort the search at this time
+  u64 nodes = 0;
+  u64 soft_nodes = 0;
+  i64 soft_ms = 0;
+  i64 hard_ms = 0;
 };
 
 struct SearchResult {
@@ -28,22 +26,22 @@ class Searcher {
  public:
   Searcher(TT& tt, std::atomic<bool>& stop);
   SearchResult go(const Position& root, const Limits& limits);
-  void clear();  // forget everything learned about move ordering, e.g. for a new game
+  void clear();
   void set_network(const nnue::Network* net) { net_ = net; }
   int static_eval(const Position& pos);
   u64 node_count() const { return nodes_.load(std::memory_order_relaxed); }
 
-  std::vector<u64> game_keys;  // hash keys of the positions played before the root, oldest first
+  std::vector<u64> game_keys;
   bool print_info = true;
-  int thread_id = 0;                   // Lazy SMP: 0 is the main thread, others are helpers
-  std::vector<const Searcher*> peers;  // helper threads, so the main thread can report total nodes
+  int thread_id = 0;
+  std::vector<const Searcher*> peers;
 
  private:
   struct Frame {
     Move move = NO_MOVE;
-    int piece = NO_PIECE;     // piece that made `move` (continuation history); NO_PIECE for null moves
+    int piece = NO_PIECE;
     int static_eval = NO_SCORE;
-    Move excluded = NO_MOVE;  // singular-extension verification search skips this move
+    Move excluded = NO_MOVE;
     Move killers[2] = {NO_MOVE, NO_MOVE};
   };
 
@@ -63,7 +61,6 @@ class Searcher {
   void report(int depth, int score) const;
   Frame& frame(int ply) { return stack_[ply + 2]; }
   const Frame& frame(int ply) const { return stack_[ply + 2]; }
-  // Only this thread writes the counter; others read it, so a relaxed load/store pair is enough (no lock).
   void count_node() { nodes_.store(nodes_.load(std::memory_order_relaxed) + 1, std::memory_order_relaxed); }
 
   static constexpr int CORRECTION_SIZE = 16384;
@@ -79,7 +76,7 @@ class Searcher {
   int seldepth_ = 0;
   int root_depth_ = 0;
   int history_[2][64][64];
-  std::vector<int> continuation_;  // [previous piece][previous to][piece][to]
+  std::vector<int> continuation_;
   int capture_history_[12][64][6];
   int correction_[2][CORRECTION_SIZE];
   Frame stack_[MAX_PLY + 8];

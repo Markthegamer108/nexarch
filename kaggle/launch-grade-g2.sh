@@ -1,12 +1,4 @@
 #!/bin/bash
-# Grade Gen 2's self-play (dataset markthegamer108/nexarch-g2-full, 10.4M positions) for training Gen 3.
-#
-#   bash kaggle/launch-grade-g2.sh lc0-bench       # ~20 min GPU: build Lc0, measure real T4 speed on 100k positions
-#   bash kaggle/launch-grade-g2.sh lc0 SAMPLE SECS # Lc0 network-only grading (2x T4), e.g. lc0 2000000 21600
-#   bash kaggle/launch-grade-g2.sh cpu SECS        # 4 CPU shards, 33-engine panel, random order until SECS
-#
-# Every job stops at its time limit and keeps what it finished. Merge everything afterwards with
-#   python tools/report_card.py 'kaggle-out/**/*.meta.npz' --out data/graded-g2.bin
 set -e
 cd "$(dirname "$0")/.."
 JOB=".venv/bin/python kaggle/job.py"
@@ -19,7 +11,7 @@ case "$1" in
       --cmd "bash kaggle/lc0-setup.sh" \
       --cmd "$LC0 --out {out}/lc0-bench --sample 100000 --seconds 600" --push ;;
   lc0)
-    SAMPLE=${2:?sample size}; SECS=${3:?seconds}; ONLY=${4-imbalance,quiet}   # ONLY="" = every category
+    SAMPLE=${2:?sample size}; SECS=${3:?seconds}; ONLY=${4-imbalance,quiet}
     NAME=${NAME:-nexarch-grade-g2-lc0}; DS=${DS:-markthegamer108/nexarch-g2-full}
     $JOB --name $NAME --gpu --internet --dataset $DS \
       --cmd "bash kaggle/lc0-setup.sh" \
@@ -32,6 +24,16 @@ case "$1" in
         --cmd "bash kaggle/setup-engines.sh" \
         --cmd "python3 tools/grade.py --config nets/graders.json --data $DATA --out {out}/grade-g2-$s.bin --workers {cpus} --shard $s --shards 4 --seconds $SECS" \
         --cmd "python3 tools/report_card.py {out}/grade-g2-$s.bin.meta.npz" --push
+    done ;;
+  cpu2)
+    SECS=${2:-39600}; DS=${DS:-markthegamer108/nexarch-g2d}; DATAFILE=${DATAFILE:-nexarch-g2d.bin}
+    PREFIX=${PREFIX:-nexarch-grade-g2d}; SHARDS=${SHARDS:-0 1 2 3}
+    for s in $SHARDS; do
+      $JOB --name $PREFIX-$s --internet --dataset markthegamer108/nexarch-engines --dataset $DS \
+        --cmd "bash kaggle/setup-engines.sh" \
+        --cmd "python3 tools/grade.py --config nets/graders.json --data '/kaggle/input/**/$DATAFILE' --out {out}/grade-g2d-$s.bin --workers {cpus} --shard $s --shards 4 --seconds $SECS" \
+        --cmd "python3 tools/report_card.py {out}/grade-g2d-$s.bin.meta.npz" --push
+      sleep 5
     done ;;
   *) sed -n 2,10p "$0"; exit 1 ;;
 esac

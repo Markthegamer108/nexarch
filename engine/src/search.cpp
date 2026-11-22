@@ -29,7 +29,6 @@ bool bound_allows(int bound, int score, int alpha, int beta) {
   return bound == BOUND_EXACT || (bound == BOUND_LOWER && score >= beta) || (bound == BOUND_UPPER && score <= alpha);
 }
 
-// Generation-zero evaluation: nothing but piece counts. Everything else has to be learned.
 int material_eval(const Position& pos) {
   int score = 0;
   for (int t = PAWN; t < KING; t++)
@@ -51,12 +50,11 @@ int captured_value(const Position& pos, Move m) {
   return victim == NO_PIECE ? 0 : PIECE_VALUE[type_of(victim)];
 }
 
-// History tables saturate smoothly at +-16384 instead of overflowing.
 void gravity(int& entry, int bonus) { entry += bonus - entry * std::abs(bonus) / 16384; }
 
 int history_bonus(int depth) { return std::min(16 * depth * depth + 32 * depth, 1800); }
 
-}  // namespace
+}
 
 Searcher::Searcher(TT& tt, std::atomic<bool>& stop)
     : tt_(tt), stop_(stop), continuation_(12 * 64 * 12 * 64), acc_(MAX_PLY + 8) {
@@ -76,7 +74,7 @@ i64 Searcher::elapsed_ms() const {
 
 int Searcher::evaluate(const Position& pos, int ply) {
   int v = net_ ? nnue::evaluate(*net_, acc_[ply], pos.stm) : material_eval(pos);
-  v = v * (200 - pos.halfmove) / 200;  // drift toward a draw as the 50-move rule approaches
+  v = v * (200 - pos.halfmove) / 200;
   return std::clamp(v, -MATE_BOUND + 1, MATE_BOUND - 1);
 }
 
@@ -85,7 +83,6 @@ int Searcher::static_eval(const Position& pos) {
   return evaluate(pos, 0);
 }
 
-// Correction history: how far search results typically land from the static eval for this pawn structure.
 int Searcher::corrected(const Position& pos, int raw) const {
   const int correction = correction_[pos.stm][pos.pawn_key % CORRECTION_SIZE] / CORRECTION_GRAIN;
   return std::clamp(raw + correction, -MATE_BOUND + 1, MATE_BOUND - 1);
@@ -200,7 +197,6 @@ SearchResult Searcher::go(const Position& root, const Limits& limits) {
 
   int previous = 0, stability = 0;
   Move last_best = NO_MOVE;
-  // Helper threads start at staggered depths so they explore slightly different trees.
   for (int depth = 1 + (thread_id & 1); depth <= limits_.depth; depth++) {
     root_depth_ = depth;
     seldepth_ = 0;
@@ -228,7 +224,6 @@ SearchResult Searcher::go(const Position& root, const Limits& limits) {
     result.depth = depth;
     if (print_info) report(depth, score);
 
-    // Time: stop early when the best move has been stable for a while, think longer when it keeps changing.
     stability = result.best == last_best ? std::min(stability + 1, 10) : 0;
     last_best = result.best;
     if (limits_.soft_ms) {
@@ -270,7 +265,7 @@ int Searcher::search(const Position& pos, int alpha, int beta, int depth, int pl
 
   int raw_eval = NO_SCORE, static_eval = NO_SCORE, eval = NO_SCORE;
   if (excluded) {
-    static_eval = eval = frame(ply).static_eval;  // same position as the enclosing search
+    static_eval = eval = frame(ply).static_eval;
   } else if (!in_check) {
     raw_eval = tt_hit && tte.eval != NO_SCORE ? tte.eval : evaluate(pos, ply);
     static_eval = eval = corrected(pos, raw_eval);
@@ -281,10 +276,8 @@ int Searcher::search(const Position& pos, int alpha, int beta, int depth, int pl
   const bool improving = !in_check && frame(ply - 2).static_eval != NO_SCORE && static_eval > frame(ply - 2).static_eval;
 
   if (!pv_node && !in_check && !excluded) {
-    // Reverse futility: far above beta at low depth, assume it holds.
     if (depth <= 8 && eval - 80 * (depth - improving) >= beta && eval < MATE_BOUND) return eval;
 
-    // Null move: if passing still beats beta, the position is good enough to cut.
     if (depth >= 3 && eval >= beta && static_eval >= beta && frame(ply - 1).move != NULL_MOVE &&
         pos.has_non_pawn(pos.stm) && beta > -MATE_BOUND) {
       const int r = 3 + depth / 3 + std::min((eval - beta) / 200, 3);
@@ -300,7 +293,6 @@ int Searcher::search(const Position& pos, int alpha, int beta, int depth, int pl
     }
   }
 
-  // Internal iterative reduction: without a hash move this node is probably not that important.
   if (depth >= 4 && tt_move == NO_MOVE && (pv_node || cutnode) && !excluded) depth--;
 
   MoveList list;
@@ -338,7 +330,6 @@ int Searcher::search(const Position& pos, int alpha, int beta, int depth, int pl
       }
     }
 
-    // Singular extension: if every other move is clearly worse than the hash move, search it deeper.
     int extension = 0;
     if (!root && m == tt_move && depth >= 8 && tte.depth >= depth - 3 && (tte.bound & BOUND_LOWER) &&
         std::abs(tt_score) < MATE_BOUND && ply < 2 * root_depth_) {
@@ -348,7 +339,7 @@ int Searcher::search(const Position& pos, int alpha, int beta, int depth, int pl
       frame(ply).excluded = NO_MOVE;
       if (stopped_) return 0;
       if (s < singular_beta) extension = 1;
-      else if (singular_beta >= beta) return singular_beta;  // several moves beat beta: multi-cut
+      else if (singular_beta >= beta) return singular_beta;
       else if (tt_score >= beta) extension = -1;
     }
 
@@ -451,7 +442,7 @@ int Searcher::qsearch(const Position& pos, int alpha, int beta, int ply) {
   }
 
   MoveList list;
-  pos.gen_moves(list, !in_check);  // in check we must look at every evasion
+  pos.gen_moves(list, !in_check);
   int scores[MAX_MOVES];
   score_moves(pos, list, scores, tt_hit ? tte.move : NO_MOVE, ply);
 

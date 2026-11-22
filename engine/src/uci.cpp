@@ -1,4 +1,3 @@
-// Entry point: the UCI protocol plus a few developer commands (perft, bench, datagen, match).
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -20,13 +19,13 @@ constexpr const char* ENGINE_NAME = "Nexarch 0.1";
 struct Engine {
   TT tt;
   std::atomic<bool> stop{false};
-  std::vector<std::unique_ptr<Searcher>> threads;  // threads[0] is the main search thread
+  std::vector<std::unique_ptr<Searcher>> threads;
   Searcher* searcher = nullptr;
   std::thread worker;
   nnue::Network net;
   bool use_net = false;
   Position pos = Position::startpos();
-  std::vector<u64> history;  // keys of positions before `pos`
+  std::vector<u64> history;
   int move_overhead = 30;
 
   Engine() {
@@ -81,7 +80,6 @@ void cmd_perft(const Position& pos, int depth) {
   std::printf("\nnodes %llu  time %.2fs  (%.1f Mnps)\n", (unsigned long long)total, secs, total / std::max(secs, 1e-9) / 1e6);
 }
 
-// Known move counts for tricky positions: any mismatch means a move-generation bug.
 bool cmd_perftsuite(bool deep) {
   struct Case {
     const char* fen;
@@ -115,7 +113,6 @@ bool cmd_perftsuite(bool deep) {
   return ok;
 }
 
-// Plays random games and checks every incrementally updated accumulator against a full rebuild.
 void cmd_nnuecheck(Engine& e, int games) {
   if (!e.use_net) {
     std::printf("nnuecheck: load a network first (setoption name EvalFile value <file>)\n");
@@ -282,7 +279,6 @@ void cmd_go(Engine& e, std::istringstream& in) {
     limits.soft_ms = std::clamp<i64>(available / moves_left + inc * 3 / 4, 1, limits.hard_ms);
     limits.hard_ms = std::min(limits.hard_ms, limits.soft_ms * 4);
   }
-  // Hard cap: never think longer than 3 seconds per move
   limits.hard_ms = std::min<i64>(limits.hard_ms ? limits.hard_ms : 3000, 3000);
   limits.soft_ms = std::min<i64>(limits.soft_ms ? limits.soft_ms : 1500, 1500);
   limits.depth = std::clamp(limits.depth, 1, MAX_PLY - 1);
@@ -291,8 +287,6 @@ void cmd_go(Engine& e, std::istringstream& in) {
     t->set_network(e.use_net ? &e.net : nullptr);
   }
   e.worker = std::thread([&e, limits, root = e.pos] {
-    // Lazy SMP: helpers search the same root and share discoveries through the hash table;
-    // the main thread decides when to stop and which move to play.
     std::vector<std::thread> helpers;
     for (size_t i = 1; i < e.threads.size(); i++)
       helpers.emplace_back([&e, i, root] { e.threads[i]->go(root, Limits{}); });
@@ -306,7 +300,7 @@ void cmd_go(Engine& e, std::istringstream& in) {
 
 void cmd_setoption(Engine& e, std::istringstream& in) {
   std::string token, name, value;
-  in >> token;  // "name"
+  in >> token;
   while (in >> token && token != "value") name += (name.empty() ? "" : " ") + token;
   while (in >> token) value += (value.empty() ? "" : " ") + token;
   e.halt();
@@ -329,7 +323,6 @@ void cmd_setoption(Engine& e, std::istringstream& in) {
   std::fflush(stdout);
 }
 
-// Returns false when the engine should exit.
 bool handle(Engine& e, const std::string& line) {
   std::istringstream in(line);
   std::string cmd;
@@ -389,6 +382,9 @@ bool handle(Engine& e, const std::string& line) {
   } else if (cmd == "match") {
     e.halt();
     run_match(rest);
+  } else if (cmd == "packfens") {
+    e.halt();
+    run_packfens(rest);
   } else if (!cmd.empty()) {
     std::printf("info string unknown command %s\n", cmd.c_str());
   }
@@ -396,13 +392,13 @@ bool handle(Engine& e, const std::string& line) {
   return true;
 }
 
-}  // namespace
+}
 
 int main(int argc, char** argv) {
   init_bitboards();
   init_zobrist();
   Engine engine;
-  if (argc > 1) {  // run one command from the command line, e.g. `nexarch bench` or `nexarch perftsuite`
+  if (argc > 1) {
     std::string line;
     for (int i = 1; i < argc; i++) line += std::string(i > 1 ? " " : "") + argv[i];
     if (line.rfind("perftsuite", 0) == 0) return cmd_perftsuite(line.find("deep") != std::string::npos) ? 0 : 1;
@@ -413,6 +409,6 @@ int main(int argc, char** argv) {
   std::string line;
   while (std::getline(std::cin, line))
     if (!handle(engine, line)) return engine.halt(), 0;
-  engine.wait();  // input closed (e.g. a piped script): let the last search finish
+  engine.wait();
   return 0;
 }

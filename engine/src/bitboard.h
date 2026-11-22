@@ -1,4 +1,3 @@
-// Attack tables: leapers are precomputed, sliders use magic bitboards.
 #pragma once
 
 #include "common.h"

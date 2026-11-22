@@ -41,7 +41,6 @@ void TT::store(u64 key, Move move, int score, int eval, int depth, int bound) {
   }
   if (target->key16 == key16) {
     if (move == NO_MOVE) move = target->move;
-    // Keep a much deeper result for the same position from this search unless the new one is exact.
     if (bound != BOUND_EXACT && depth + 3 < target->depth && (target->gen_bound & 0xFC) == generation_) return;
   }
   target->key16 = key16;

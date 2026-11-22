@@ -1,21 +1,4 @@
 #!/usr/bin/env python3
-"""Grade self-play positions with an ensemble of UCI engines (Stockfish, Lc0, ...).
-
-Every engine searches every position; the scores are averaged as win probabilities
-(sigmoid(cp / 400), the same scale trainer/train.py uses) and stored back as centipawns.
-Mates count as near-certain wins/losses instead of +-20000 cp, so one mate can't swamp the average.
-
-Work is split over --workers processes (each runs its own copy of every engine, 1 thread each)
-and written incrementally, so a time limit or crash keeps everything finished so far.
-
-Outputs:
-  OUT                 relabeled 32-byte records (same format as `nexarch datagen`), white's point of view
-  OUT.scores.npy      raw per-engine scores, int16 [N, engines], side-to-move view (mate = +-30000, missing = -32768)
-  OUT.engines.json    engine order for the .scores.npy columns
-
-Engine JSON: {"engines": [{"name", "path", "init": [...], "nodes": optional per-engine node limit}]}.
-"{worker}" and "{gpu}" (= worker % --gpus) are substituted in init lines, e.g. for Lc0 on several GPUs.
-"""
 import argparse
 import glob
 import json
@@ -38,7 +21,7 @@ PIECES = "PNBRQKpnbrqk"
 SCALE = 400.0
 MATE_RAW = 30000
 MISSING = -32768
-P_MAX = 0.999  # win probability a mate maps to
+P_MAX = 0.999
 
 
 def to_fen(rec):
@@ -70,7 +53,7 @@ def to_fen(rec):
 
 
 class Engine:
-    TIMEOUT = 120  # seconds without output before an engine counts as hung
+    TIMEOUT = 120
 
     def __init__(self, cfg, worker, gpus):
         self.cfg = cfg
@@ -84,7 +67,6 @@ class Engine:
         self.start()
 
     def start(self):
-        # Unbuffered binary pipe + our own line buffer, so select() sees exactly what is unread.
         self.proc = subprocess.Popen([self.path], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                      stderr=subprocess.DEVNULL, bufsize=0)
         self.buf = b""
@@ -111,7 +93,7 @@ class Engine:
                 raise RuntimeError(f"{self.name} exited")
             self.buf += chunk
         line, self.buf = self.buf.split(b"\n", 1)
-        return line.decode(errors="replace").strip() + "\n"  # some engines (Devre) indent their lines
+        return line.decode(errors="replace").strip() + "\n"
 
     def wait_for(self, token):
         while True:
@@ -119,7 +101,6 @@ class Engine:
                 return
 
     def score(self, fen, nodes):
-        """Side-to-move score: cp int, or +-MATE_RAW for a mate, or None."""
         self.send(f"position fen {fen}")
         self.send(f"go nodes {self.nodes or nodes}")
         score = None
@@ -164,7 +145,7 @@ def worker_main(w, args, configs, data_path, idx_path, out_prefix, deadline, cou
     for j in idx:
         if time.time() > deadline:
             break
-        arr = np.array(data[j:j + 1])  # writable copy
+        arr = np.array(data[j:j + 1])
         rec = arr[0]
         fen = to_fen(rec)
         raws = []
@@ -183,7 +164,7 @@ def worker_main(w, args, configs, data_path, idx_path, out_prefix, deadline, cou
         if len(probs) * 2 < len(engines):
             continue
         p = min(P_MAX, max(1 - P_MAX, sum(probs) / len(probs)))
-        cp = SCALE * math.log(p / (1 - p))  # side to move
+        cp = SCALE * math.log(p / (1 - p))
         arr["score"][0] = round(cp if rec["stm"] == 0 else -cp)
         buf.append(arr.tobytes())
         sbuf.append(np.array(raws, dtype=np.int16).tobytes())
@@ -200,7 +181,6 @@ def worker_main(w, args, configs, data_path, idx_path, out_prefix, deadline, cou
 
 
 def check_engines(configs, args):
-    """Start every engine once and score a test position; drop the ones that don't work here."""
     fen = "r1bq1rk1/pp2bppp/2n1pn2/2pp4/3P4/2PBPN2/PP1N1PPP/R2QK2R w KQ - 0 8"
     good = []
     for cfg in configs:

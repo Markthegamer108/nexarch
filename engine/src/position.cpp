@@ -16,7 +16,7 @@ constexpr const char* PIECE_CHARS = "PNBRQKpnbrqk";
 
 int see_value(int piece) { return piece == NO_PIECE ? 0 : SEE_VALUE[type_of(piece)]; }
 
-}  // namespace
+}
 
 void init_zobrist() {
   Rng rng(0x4E6578617263ULL);
@@ -104,7 +104,6 @@ bool Position::set_fen(const std::string& fen) {
     if (c == 'k') castling |= 4;
     if (c == 'q') castling |= 8;
   }
-  // Drop castling rights that the piece placement cannot support.
   if (board[E1] != make_piece(WHITE, KING)) castling &= ~3;
   if (board[H1] != make_piece(WHITE, ROOK)) castling &= ~1;
   if (board[A1] != make_piece(WHITE, ROOK)) castling &= ~2;
@@ -112,7 +111,6 @@ bool Position::set_fen(const std::string& fen) {
   if (board[H8] != make_piece(BLACK, ROOK)) castling &= ~4;
   if (board[A8] != make_piece(BLACK, ROOK)) castling &= ~8;
 
-  // Only keep an en passant square if a capture there is actually possible (keeps hash keys canonical).
   if (ep_text.size() == 2 && ep_text[0] >= 'a' && ep_text[0] <= 'h' && (ep_text[1] == '3' || ep_text[1] == '6')) {
     const int sq = make_sq(ep_text[0] - 'a', ep_text[1] - '1');
     if (PAWN_ATTACKS[stm ^ 1][sq] & pcs[stm][PAWN]) ep = sq;
@@ -365,7 +363,6 @@ bool Position::see_ge(Move m, int threshold) const {
       occupied ^= bb(lsb(b));
       attackers |= (bishop_attacks(to, occupied) & diagonal) | (rook_attacks(to, occupied) & straight);
     } else {
-      // Only the king is left: it may only recapture if the other side has nothing more.
       return (attackers & ~occ[side]) ? res ^ 1 : res;
     }
   }

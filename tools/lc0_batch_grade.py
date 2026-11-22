@@ -1,23 +1,5 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
-# This file loads Lc0's GPL-3.0 Python module (lczero backends) into the same process, so unlike the
-# rest of Nexarch (MIT) it is licensed GPL-3.0-or-later.
-"""Grade self-play positions with Lc0's network directly (no search), in big GPU batches.
-
-Why no search: Lc0 search on a T4 runs ~1,000 nodes/s with BT4, i.e. ~6.5 positions/s even at 128 nodes.
-One batched network evaluation per position is orders of magnitude faster, and the raw BT4 value head
-is still a strong positional judge (that is the role it plays in our panel: imbalance + quiet positions).
-
-Pipeline:
-  1. random sample of positions in --only categories (default imbalance,quiet), up to --sample
-  2. one process per GPU (CUDA_VISIBLE_DEVICES), each evaluates its share in --batch sized batches
-  3. results are appended to part files after every batch, so a time limit or a killed session keeps
-     everything finished so far; --finalize-only rebuilds the output from the parts
-  4. OUT.meta.npz in tools/grade.py's format (key, cats, role_sum, raw, roles, engines, categories),
-     so `tools/report_card.py` merges it with the CPU panel's grading
-
-Needs Lc0 built with -Dpython_bindings=true (module `backends`, path given by --lc0-py).
-"""
 import argparse
 import glob
 import math
@@ -29,8 +11,8 @@ import time
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from grade import CAT, CATEGORIES, categorize  # noqa: E402
-from relabel_ensemble import RECORD, to_fen  # noqa: E402
+from grade import CAT, CATEGORIES, categorize
+from relabel_ensemble import RECORD, to_fen
 
 SCALE = 400.0
 
@@ -75,7 +57,7 @@ def gpu_worker(g, args, tmp, deadline):
     cats = np.load(tmp + ".cats.npy", mmap_mode="r")[g::args.gpus]
     done_before = 0
     kf = f"{args.out}.gpu{g}.key"
-    if os.path.exists(kf):  # resume after a restart: skip what is already graded
+    if os.path.exists(kf):
         done_before = os.path.getsize(kf) // RECORD.itemsize
     weights = lc.Weights(args.weights)
     backend = lc.Backend(weights=weights, backend=args.backend, options=args.backend_opts or None)
@@ -88,7 +70,7 @@ def gpu_worker(g, args, tmp, deadline):
         r = np.array(recs[s:s + args.batch])
         inputs = [lc.GameState(fen=to_fen(x)).as_input(backend) for x in r]
         outs = backend.evaluate(*inputs)
-        p = np.array([(1.0 + o.q()) / 2.0 for o in outs], np.float32)  # side to move's expected score
+        p = np.array([(1.0 + o.q()) / 2.0 for o in outs], np.float32)
         files["key"].write(r.tobytes())
         files["cats"].write(np.asarray(cats[s:s + len(r)], np.uint16).tobytes())
         files["p"].write(p.tobytes())
@@ -113,7 +95,7 @@ def finalize(args):
         k = np.fromfile(b + ".key", dtype=RECORD)
         c = np.fromfile(b + ".cats", dtype=np.uint16)
         p = np.fromfile(b + ".p", dtype=np.float32)
-        n = min(len(k), len(c), len(p))  # a kill mid-write can leave one file a batch ahead
+        n = min(len(k), len(c), len(p))
         keys.append(k[:n]); cats.append(c[:n]); ps.append(p[:n])
     if not keys:
         sys.exit("no graded parts found")
@@ -158,15 +140,14 @@ def main():
             mask = sum(CAT[c] for c in args.only.split(",")) if args.only else 0
             if mask:
                 idx, cats = sample_positions(data, mask, args.sample, args.cpus, args.seed)
-            else:  # no filter: skip the slow python-chess pass (20 min per 10M positions on Kaggle's 4 CPUs);
-                # report_card.py ORs in the CPU panel's categories when merging
+            else:
                 idx = np.random.default_rng(args.seed).permutation(len(data))[:args.sample]
                 cats = np.full(len(idx), CAT["all"], np.uint16)
                 print(f"no category filter: grading {len(idx):,} positions in random order", flush=True)
             np.save(tmp + ".recs.npy", data[idx])
             np.save(tmp + ".cats.npy", cats)
             del data
-        ctx = mp.get_context("spawn")  # fresh process per GPU, so CUDA_VISIBLE_DEVICES applies before CUDA init
+        ctx = mp.get_context("spawn")
         procs = [ctx.Process(target=gpu_worker, args=(g, args, tmp, deadline)) for g in range(args.gpus)]
         for p in procs:
             p.start()

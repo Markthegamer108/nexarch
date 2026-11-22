@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <iostream>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -43,9 +44,6 @@ class Args {
   std::map<std::string, std::string> values_;
 };
 
-// One training position, 32 bytes (see trainer/train.py for the matching reader):
-// u64 occupancy | 16 bytes of 4-bit piece codes in square order | i16 score (white's view)
-// | u8 result (0 black wins, 1 draw, 2 white wins) | u8 side to move | u16 fullmove | u8 halfmove | u8 spare
 struct Record {
   u8 bytes[32];
 };
@@ -74,7 +72,6 @@ int repetitions(const std::vector<u64>& keys, const Position& pos) {
   return count;
 }
 
-// Plays a few random moves so every game starts somewhere different.
 bool random_opening(Position& pos, std::vector<u64>& keys, Rng& rng, int plies) {
   for (int i = 0; i < plies; i++) {
     MoveList list;
@@ -92,7 +89,6 @@ bool random_opening(Position& pos, std::vector<u64>& keys, Rng& rng, int plies) 
   return count_legal(pos) > 0;
 }
 
-// Plays one game and returns the result from White's point of view: 0 loss, 1 draw, 2 win.
 template <class OnMove>
 int play_game(Position pos, std::vector<u64> keys, Searcher& white, Searcher& black, const Limits& limits,
               OnMove&& on_move) {
@@ -143,7 +139,7 @@ u64 seed_from(const Args& args) {
   return s ? u64(s) : u64(Clock::now().time_since_epoch().count());
 }
 
-}  // namespace
+}
 
 void run_datagen(const std::string& text) {
   const Args args(text);
@@ -187,7 +183,6 @@ void run_datagen(const std::string& text) {
     while (!stop_all.load() && claimed.fetch_add(1) < games) {
       Position pos;
       std::vector<u64> keys;
-      // Find a random opening that is still roughly balanced.
       while (true) {
         pos = Position::startpos();
         keys.clear();
@@ -243,22 +238,86 @@ void run_datagen(const std::string& text) {
   std::fclose(out);
 }
 
+void run_packfens(const std::string& text) {
+  const Args args(text);
+  const std::string out_path = args.str("out", "");
+  if (out_path.empty()) {
+    std::printf("packfens: give out=FILE\n");
+    return;
+  }
+  std::FILE* out = std::fopen(out_path.c_str(), "ab");
+  if (!out) {
+    std::printf("packfens: cannot write %s\n", out_path.c_str());
+    return;
+  }
+  std::vector<Record> buf;
+  buf.reserve(1 << 16);
+  u64 read = 0, kept = 0, bad = 0, illegal = 0, check = 0, noisy = 0;
+  std::string line;
+  auto legal_looking = [](const Position& p) {
+    constexpr u64 BACK_RANKS = 0xFF000000000000FFull;
+    return popcount(p.all) <= 32 && popcount(p.pcs[WHITE][KING]) == 1 && popcount(p.pcs[BLACK][KING]) == 1 &&
+           !((p.pcs[WHITE][PAWN] | p.pcs[BLACK][PAWN]) & BACK_RANKS) &&
+           !p.attacked(p.king_sq(p.stm ^ 1), p.stm);
+  };
+  auto square = [](char f, char r) { return (f >= 'a' && f <= 'h' && r >= '1' && r <= '8') ? (f - 'a') + (r - '1') * 8 : -1; };
+  while (std::getline(std::cin, line)) {
+    read++;
+    const size_t t1 = line.find('\t'), t2 = t1 == std::string::npos ? t1 : line.find('\t', t1 + 1);
+    if (t2 == std::string::npos) { bad++; continue; }
+    std::string fen = line.substr(0, t1);
+    if (std::count(fen.begin(), fen.end(), ' ') == 3) fen += " 0 1";
+    const std::string move = line.substr(t1 + 1, t2 - t1 - 1);
+    char* end = nullptr;
+    const long score = std::strtol(line.c_str() + t2 + 1, &end, 10);
+    Position pos;
+    if (move.size() < 4 || end == line.c_str() + t2 + 1 || !pos.set_fen(fen)) { bad++; continue; }
+    if (!legal_looking(pos)) { illegal++; continue; }
+    const int from = square(move[0], move[1]), to = square(move[2], move[3]);
+    if (from < 0 || to < 0 || pos.board[from] == NO_PIECE || color_of(pos.board[from]) != pos.stm) { bad++; continue; }
+    if (pos.in_check()) { check++; continue; }
+    const int target = pos.board[to];
+    const bool capture = target != NO_PIECE && color_of(target) != pos.stm;
+    const bool en_passant = type_of(pos.board[from]) == PAWN && (from & 7) != (to & 7) && target == NO_PIECE;
+    if (capture || en_passant || move.size() >= 5) { noisy++; continue; }
+    Record r = pack(pos, int(std::clamp<long>(score, -32000, 32000)));
+    r.bytes[26] = 1;
+    r.bytes[31] = 1;
+    buf.push_back(r);
+    kept++;
+    if (buf.size() == buf.capacity()) {
+      std::fwrite(buf.data(), sizeof(Record), buf.size(), out);
+      buf.clear();
+    }
+  }
+  std::fwrite(buf.data(), sizeof(Record), buf.size(), out);
+  std::fclose(out);
+  std::printf("packfens: %llu lines, %llu kept, skipped %llu impossible positions, %llu in check, "
+              "%llu capture/promotion, %llu unreadable\n",
+              (unsigned long long)read, (unsigned long long)kept, (unsigned long long)illegal, (unsigned long long)check,
+              (unsigned long long)noisy, (unsigned long long)bad);
+}
+
 void run_match(const std::string& text) {
   const Args args(text);
   const int threads = int(std::max<i64>(1, args.num("threads", 1)));
   const u64 pairs = u64(std::max<i64>(1, args.num("games", 100) / 2));
   const u64 soft_nodes = u64(args.num("nodes", 5000));
+  const i64 movetime = args.num("movetime", 0);
   const int plies = int(args.num("plies", 8));
   const u64 seed = seed_from(args);
   nnue::Network net_a, net_b;
   const bool use_a = load_net(args.str("a", "none"), net_a);
   const bool use_b = load_net(args.str("b", "none"), net_b);
-  std::printf("match: A=%s vs B=%s, %llu games at %llu nodes\n", use_a ? net_a.path.c_str() : "material",
-              use_b ? net_b.path.c_str() : "material", (unsigned long long)(pairs * 2), (unsigned long long)soft_nodes);
+  char budget[64];
+  if (movetime > 0) std::snprintf(budget, sizeof(budget), "%lld ms per move", (long long)movetime);
+  else std::snprintf(budget, sizeof(budget), "%llu nodes", (unsigned long long)soft_nodes);
+  std::printf("match: A=%s vs B=%s, %llu games at %s\n", use_a ? net_a.path.c_str() : "material",
+              use_b ? net_b.path.c_str() : "material", (unsigned long long)(pairs * 2), budget);
   std::fflush(stdout);
 
   std::atomic<u64> next_pair{0};
-  u64 wins = 0, draws = 0, losses = 0;  // from A's point of view
+  u64 wins = 0, draws = 0, losses = 0;
   std::mutex mutex;
 
   auto worker = [&](int id) {
@@ -273,8 +332,12 @@ void run_match(const std::string& text) {
     if (use_a) a->set_network(&net_a);
     if (use_b) b->set_network(&net_b);
     Limits limits;
-    limits.soft_nodes = soft_nodes;
-    limits.nodes = soft_nodes * 20;
+    if (movetime > 0) {
+      limits.soft_ms = limits.hard_ms = movetime;
+    } else {
+      limits.soft_nodes = soft_nodes;
+      limits.nodes = soft_nodes * 20;
+    }
     while (next_pair.fetch_add(1) < pairs) {
       Position start;
       std::vector<u64> keys;

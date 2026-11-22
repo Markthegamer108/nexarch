@@ -1,9 +1,4 @@
 #!/usr/bin/env python3
-"""Install the winner of a head-to-head match between two candidate networks.
-
-usage: pick.py <match log> <candidate A .nnue> <candidate B .nnue> <final .nnue>
-The log must contain the engine's "match result: A +W =D -L" line (A = first candidate).
-"""
 import re
 import shutil
 import sys

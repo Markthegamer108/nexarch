@@ -10,8 +10,6 @@
 
 namespace nnue {
 
-// File layout (little endian): "NXNN", u32 version = 1, u32 hidden, u32 reserved,
-// i16 ft_weights[768 * hidden], i16 ft_bias[hidden], i16 out_weights[2 * hidden], i32 out_bias.
 bool Network::load(const std::string& file, std::string& error) {
   std::ifstream in(file, std::ios::binary);
   if (!in) {
@@ -76,11 +74,11 @@ void update(const Network& net, Accumulator& dst, const Accumulator& src, const 
     }
     const i16* in = src.v[p];
     i16* out = dst.v[p];
-    if (na == 1 && ns == 1) {  // quiet move or promotion
+    if (na == 1 && ns == 1) {
       for (int i = 0; i < h; i++) out[i] = i16(in[i] + add[0][i] - sub[0][i]);
-    } else if (na == 1 && ns == 2) {  // capture
+    } else if (na == 1 && ns == 2) {
       for (int i = 0; i < h; i++) out[i] = i16(in[i] + add[0][i] - sub[0][i] - sub[1][i]);
-    } else if (na == 2 && ns == 2) {  // castling
+    } else if (na == 2 && ns == 2) {
       for (int i = 0; i < h; i++) out[i] = i16(in[i] + add[0][i] + add[1][i] - sub[0][i] - sub[1][i]);
     } else {
       std::memcpy(out, in, size_t(h) * sizeof(i16));
@@ -104,7 +102,7 @@ int finish(const Network& net, i64 sum) {
   return int(sum * SCALE / (QA * QB));
 }
 
-}  // namespace
+}
 
 int evaluate_scalar(const Network& net, const Accumulator& acc, int stm) {
   const int h = net.hidden;
@@ -124,9 +122,6 @@ int evaluate_scalar(const Network& net, const Accumulator& acc, int stm) {
 }
 
 #if defined(__AVX2__)
-// SCReLU dot product, 16 neurons at a time: clamp to [0, QA], multiply by the weight in 16 bits
-// (safe because |w| <= 127), then multiply by the activation again while summing pairs into 32 bits.
-// Partial sums are flushed to 64 bits every 64 vectors so even the widest network cannot overflow.
 int evaluate(const Network& net, const Accumulator& acc, int stm) {
   if (!net.simd_safe) return evaluate_scalar(net, acc, stm);
   const int h = net.hidden;
@@ -156,4 +151,4 @@ int evaluate(const Network& net, const Accumulator& acc, int stm) {
 int evaluate(const Network& net, const Accumulator& acc, int stm) { return evaluate_scalar(net, acc, stm); }
 #endif
 
-}  // namespace nnue
+}

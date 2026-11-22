@@ -1,4 +1,3 @@
-// Basic types and helpers shared by the whole engine.
 #pragma once
 
 #include <bit>
@@ -15,7 +14,6 @@ using i16 = std::int16_t;
 enum Color : int { WHITE = 0, BLACK = 1 };
 enum PieceType : int { PAWN = 0, KNIGHT = 1, BISHOP = 2, ROOK = 3, QUEEN = 4, KING = 5 };
 
-// A piece is color * 6 + type; squares run a1 = 0 ... h8 = 63.
 constexpr int NO_PIECE = 12;
 constexpr int NO_SQ = 64;
 
@@ -45,7 +43,6 @@ constexpr u64 FILE_H_BB = FILE_A_BB << 7;
 constexpr u64 RANK_1_BB = 0xFFULL;
 constexpr u64 RANK_8_BB = RANK_1_BB << 56;
 
-// Moves pack into 16 bits: from (6) | to (6) | promotion piece (2) | flag (2).
 using Move = u16;
 constexpr Move NO_MOVE = 0;
 constexpr Move NULL_MOVE = 65;
@@ -63,10 +60,9 @@ constexpr int MAX_PLY = 128;
 constexpr int MAX_MOVES = 256;
 constexpr int INF = 32000;
 constexpr int MATE = 31000;
-constexpr int MATE_BOUND = MATE - 2 * MAX_PLY;  // any |score| >= this is a forced mate
+constexpr int MATE_BOUND = MATE - 2 * MAX_PLY;
 constexpr int NO_SCORE = 32001;
 
-// xorshift64* — small, fast and plenty for hash keys and random openings.
 struct Rng {
   u64 state;
   explicit Rng(u64 seed) : state(seed ? seed : 0x9E3779B97F4A7C15ULL) {}

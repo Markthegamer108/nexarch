@@ -1,6 +1,3 @@
-# Builds nexarch.exe with the Visual Studio C++ compiler (MSVC).
-# Usage: .\build.ps1            (AVX2 build for modern CPUs)
-#        .\build.ps1 -Arch AVX  (older CPUs)
 param(
   [string]$Arch = 'AVX2',
   [string]$Out = 'nexarch.exe'
@@ -16,7 +13,6 @@ New-Item -ItemType Directory -Force $objDir | Out-Null
 $sources = (Get-ChildItem (Join-Path $PSScriptRoot 'src\*.cpp') | ForEach-Object { '"' + $_.FullName + '"' }) -join ' '
 $exe = Join-Path $PSScriptRoot $Out
 
-# vcvars64.bat only works from cmd.exe, so the compile runs from a small batch file.
 $bat = Join-Path $objDir 'build.bat'
 @"
 @echo off

@@ -1,9 +1,5 @@
 name: Grade self-play for training
 
-# Grades Nexarch's self-play positions with the engine panel (tools/grade.py + nets/graders.json).
-# The graded positions are the training data for the next network.
-# Started by hand only. Engines and data come from private Kaggle datasets (secret KAGGLE_API_TOKEN),
-# so no third-party engine binaries are stored in this repo.
 
 on:
   workflow_dispatch:
@@ -45,10 +41,8 @@ jobs:
       - name: Install tools
         run: pip install -q numpy chess kaggle six
       - name: Download engines and positions
-        # A dataset that Kaggle has just reported as "ready" can still answer 404 for a while (we saw about
-        # 35 minutes), so every download is retried for up to an hour before the job gives up.
         run: |
-          fetch() {  # fetch DATASET DIR FILE_THAT_MUST_EXIST
+          fetch() {
             for i in $(seq 1 13); do
               if kaggle datasets download "$1" -p "$2" --unzip -o -q && [ -f "$3" ]; then return 0; fi
               echo "::warning::download of $1 failed (try $i/13), retrying in 5 minutes"
@@ -62,9 +56,6 @@ jobs:
           fetch "$DATASET" data "data/$DATAFILE"
           ls engines/bin | wc -l; ls -la data
       - name: Grade
-        # Kaggle runs the same shards from the front, these jobs walk them from the back (no overlap).
-        # If the downloads needed retries, grading gets shorter so the job still finishes, and uploads,
-        # before its time limit.
         run: |
           left=$(( 355 * 60 - ($(date +%s) - JOB_START) - 900 ))
           secs=$GRADE_SECONDS

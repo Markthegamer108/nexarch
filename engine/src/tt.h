@@ -1,4 +1,3 @@
-// Transposition table: 32-byte buckets holding three 10-byte entries.
 #pragma once
 
 #include <vector>
@@ -29,7 +28,7 @@ class TT {
     i16 score;
     i16 eval;
     u8 depth;
-    u8 gen_bound;  // generation in the top 6 bits, bound in the low 2
+    u8 gen_bound;
   };
   struct Cluster {
     Entry entries[3];

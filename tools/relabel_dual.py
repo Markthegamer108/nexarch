@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Dual-teacher relabeling: Stockfish + LC0 both score each position, scores are averaged."""
 import argparse
 import glob
 import numpy as np
@@ -114,7 +113,6 @@ def main():
     data = data[args.shard::args.shards]
     print(f"dual-relabeling {len(data):,} positions (shard {args.shard}/{args.shards})", flush=True)
 
-    # Start both engines
     sf = Engine(args.engine_sf, "Stockfish")
     sf._send("setoption name Threads value 1")
     sf._send("setoption name Hash value 16")
@@ -143,10 +141,8 @@ def main():
         if sf_score is None or lc0_score is None:
             continue
 
-        # Average the two evaluations (both in centipawns, white's perspective)
         avg = int((sf_score + lc0_score) / 2)
 
-        # Convert to white's perspective for storage
         stored = avg if rec["stm"] == 0 else -avg
         stored = np.clip(stored, -32000, 32000)
 

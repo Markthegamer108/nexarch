@@ -1,4 +1,3 @@
-// Board state, move generation and move making (copy-make: every move produces a new Position).
 #pragma once
 
 #include <string>
@@ -11,10 +10,9 @@ struct MoveList {
   void add(Move m) { moves[size++] = m; }
 };
 
-// Pieces changed by the last move, so the NNUE accumulator can be updated instead of rebuilt.
 struct DirtyPieces {
   int n = 0;
-  int piece[3], from[3], to[3];  // from == NO_SQ: piece appeared; to == NO_SQ: piece removed
+  int piece[3], from[3], to[3];
   void add(int p, int f, int t) {
     piece[n] = p;
     from[n] = f;
@@ -32,9 +30,9 @@ struct Position {
   u64 occ[2];
   u64 all;
   u8 board[64];
-  int stm, castling, ep, halfmove, fullmove;  // castling bits: 1 = K, 2 = Q, 4 = k, 8 = q
+  int stm, castling, ep, halfmove, fullmove;
   u64 key;
-  u64 pawn_key;  // hash of the pawns alone (used by correction history)
+  u64 pawn_key;
   DirtyPieces dirty;
 
   static Position startpos();
@@ -50,10 +48,10 @@ struct Position {
   bool is_noisy(Move m) const { return is_capture(m) || (move_flag(m) == MF_PROMO && move_promo(m) == QUEEN); }
   bool insufficient_material() const;
 
-  void gen_moves(MoveList& list, bool noisy_only) const;  // pseudo-legal; make() rejects illegal ones
-  bool make(Move m, Position& next) const;                // false if the move leaves our king in check
+  void gen_moves(MoveList& list, bool noisy_only) const;
+  bool make(Move m, Position& next) const;
   void make_null(Position& next) const;
-  bool see_ge(Move m, int threshold) const;  // static exchange: does this capture sequence gain >= threshold?
+  bool see_ge(Move m, int threshold) const;
 
  private:
   void put(int p, int sq);
@@ -64,5 +62,5 @@ struct Position {
 void init_zobrist();
 std::string square_name(int sq);
 std::string move_to_uci(Move m);
-Move parse_uci_move(const Position& pos, const std::string& text);  // NO_MOVE if not legal here
+Move parse_uci_move(const Position& pos, const std::string& text);
 int count_legal(const Position& pos);

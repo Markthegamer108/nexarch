@@ -1,11 +1,4 @@
 #!/usr/bin/env python3
-"""Re-score self-play positions with a teacher engine (Stockfish 19 at full strength).
-
-Reads datagen .bin files, asks the teacher for a fixed-node search of every position, and writes the same
-records with the teacher's score (White's view). Game results are kept, so training can still blend in outcomes.
-
-  python tools/relabel.py --engine ./sf --data 'in/**/*.bin' --out relabeled.bin --nodes 20000 --workers 4
-"""
 import argparse
 import glob
 import multiprocessing as mp
@@ -27,7 +20,6 @@ _nodes = 0
 
 
 def to_fen(rec):
-    """Rebuild a FEN from a packed record (castling rights inferred from king/rook placement)."""
     board = ["."] * 64
     occ, k = int(rec["occ"]), 0
     for sq in range(64):
@@ -82,7 +74,6 @@ def wait_for(token):
 
 
 def score_fen(fen):
-    """Teacher's score in centipawns from the side to move's view."""
     send(f"position fen {fen}")
     send(f"go nodes {_nodes}")
     score = None
@@ -129,7 +120,7 @@ def main():
 
     files = sorted({f for p in args.data for f in glob.glob(p, recursive=True)})
     data = np.concatenate([np.fromfile(f, dtype=RECORD) for f in files])
-    data = data[np.random.default_rng(42).permutation(len(data))]  # mix games so partial runs stay diverse
+    data = data[np.random.default_rng(42).permutation(len(data))]
     data = data[args.shard::args.shards]
     if args.limit:
         data = data[:args.limit]

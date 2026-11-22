@@ -1,14 +1,4 @@
 #!/usr/bin/env python3
-"""Engine-vs-engine matches over UCI: Elo estimates, SPRT for testing changes, and the Stockfish ladder.
-
-Examples
-  # Nexarch (with a network) against Stockfish limited to 1500 Elo, 10s + 0.1s per game
-  python tools/match.py --a engine/nexarch.exe --a-opt EvalFile=nets/nexarch-g1.nnue \
-      --b "node path/to/stockfish-19-single.js" --b-opt UCI_LimitStrength=true --b-opt UCI_Elo=1500 --games 40
-
-  # Test a change: stop as soon as the result is statistically clear (SPRT, elo0=0, elo1=5)
-  python tools/match.py --a new.exe --b old.exe --tc 8+0.08 --games 20000 --concurrency 10 --sprt 0 5
-"""
 import argparse
 import math
 import os
@@ -23,7 +13,6 @@ from concurrent.futures import ThreadPoolExecutor
 import chess
 import chess.engine
 
-# Balanced, popular opening lines; each is played twice with colours reversed.
 OPENINGS = [
     "e2e4 e7e5 g1f3 b8c6 f1b5 a7a6", "e2e4 c7c5 g1f3 d7d6 d2d4 c5d4 f3d4 g8f6 b1c3 a7a6",
     "d2d4 d7d5 c2c4 e7e6 b1c3 g8f6", "d2d4 g8f6 c2c4 g7g6 b1c3 f8g7 e2e4 d7d6",
@@ -55,7 +44,6 @@ def load_book(path):
 
 
 def start_board(entry):
-    """An opening is either a list of UCI moves or an EPD/FEN line."""
     if "/" in entry:
         return chess.Board(" ".join(entry.split()[:4]) + " 0 1")
     board = chess.Board()
@@ -70,7 +58,6 @@ def elo(score):
 
 
 def llr(w, d, l, elo0, elo1):
-    """Generalised SPRT log-likelihood ratio (trinomial, logistic Elo)."""
     n = w + d + l
     if n == 0 or w == 0 or l == 0:
         return 0.0
@@ -85,8 +72,7 @@ def llr(w, d, l, elo0, elo1):
 class Player:
     def __init__(self, command, options, name):
         parts = shlex.split(command, posix=False)
-        parts[0] = shutil.which(parts[0]) or parts[0]  # Windows needs an absolute path to the executable
-        # The timeout guards every engine command, so a frozen engine raises instead of hanging the match.
+        parts[0] = shutil.which(parts[0]) or parts[0]
         self.engine = chess.engine.SimpleEngine.popen_uci(parts, timeout=60)
         if options:
             self.engine.configure(options)
@@ -114,7 +100,6 @@ class EngineFailure(Exception):
 
 
 def play_game(white, black, opening, args, game_id):
-    """Returns (result string from White's view, number of plies)."""
     board = start_board(opening)
     base, inc = args.base, args.inc
     clocks = {chess.WHITE: base, chess.BLACK: base}
@@ -128,7 +113,6 @@ def play_game(white, black, opening, args, game_id):
                                        white_inc=inc, black_inc=inc)
         t0 = time.perf_counter()
         try:
-            # game= makes python-chess send "ucinewgame" whenever a new game starts.
             result = mover.engine.play(board, limit, info=chess.engine.INFO_SCORE, game=game_id)
         except (chess.engine.EngineError, chess.engine.EngineTerminatedError, TimeoutError) as exc:
             raise EngineFailure(board.turn) from exc
@@ -143,7 +127,6 @@ def play_game(white, black, opening, args, game_id):
         score = result.info.get("score")
         if score is not None:
             cp = score.pov(board.turn).score(mate_score=100000)
-            # Adjudicate: both sides agree one side is winning by a lot, or the game is dead equal.
             good[board.turn] = good[board.turn] + 1 if cp >= args.resign else 0
             good[not board.turn] = good[not board.turn] + 1 if cp <= -args.resign else 0
             draw_run = draw_run + 1 if abs(cp) <= 10 and board.ply() >= 80 else 0
@@ -212,7 +195,6 @@ def main():
         try:
             res, plies = play_game(a if a_white else b, b if a_white else a, opening, args, game_id=i)
         except EngineFailure as failure:
-            # The failing engine loses the game and gets restarted.
             a_failed = (failure.side == chess.WHITE) == a_white
             res = ("0-1" if failure.side == chess.WHITE else "1-0")
             with lock:
@@ -262,6 +244,5 @@ def main():
 
 if __name__ == "__main__":
     main()
-    # Engines are already closed; skip interpreter shutdown, which can hang on Windows subprocess pipes.
     sys.stdout.flush()
     os._exit(0)

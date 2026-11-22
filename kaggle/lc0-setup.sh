@@ -1,6 +1,4 @@
 #!/bin/bash
-# Build Lc0 0.32.1 with CUDA + Python bindings on a Kaggle T4 box, fetch BT4, and smoke-test both GPUs.
-# Leaves: /tmp/nexarch/lc0/build/release/backends*.so and /tmp/nexarch/bt4.pb.gz
 set -e
 cd /tmp/nexarch
 pip install -q meson ninja chess 2>&1 | grep -v -i 'notice\|warning' || true
@@ -20,7 +18,7 @@ sys.path.insert(0, "/tmp/nexarch/lc0/build/release")
 import backends as lc
 b = lc.Backend(weights=lc.Weights("/tmp/nexarch/bt4.pb.gz"), backend="cuda-fp16")
 x = [lc.GameState(fen="r1bq1rk1/pp2bppp/2n1pn2/2pp4/3P4/2PBPN2/PP1N1PPP/R2QK2R w KQ - 0 8").as_input(b) for _ in range(512)]
-b.evaluate(*x)  # warm-up
+b.evaluate(*x)
 t = time.time()
 for _ in range(5):
     o = b.evaluate(*x)
