@@ -72,6 +72,7 @@ class State:
         self.status = "idle"
         self.result = ""
         self.moves = []
+        self.last_uci = ""
         self.stats = {"w": 0, "d": 0, "l": 0, "done": 0}
         self.current_game = 0
         self.total_games = 1
@@ -108,13 +109,39 @@ class State:
                 "clocks": dict(self.clocks),
                 "thinking": self.thinking,
                 "last_error": self.last_error,
+                "last_uci": self.last_uci,
+                "legal": self.legal_map(),
+                "check": self.board.is_check(),
+                "termination": self.termination(),
+                "winner": self.winner(),
                 "engines": [e["name"] for e in self.engines],
             }
+
+    def legal_map(self):
+        human_turn = (self.board.turn == chess.WHITE and self.white_human) or \
+                     (self.board.turn == chess.BLACK and self.black_human)
+        if not human_turn:
+            return {}
+        out = {}
+        for mv in self.board.legal_moves:
+            out.setdefault(chess.square_name(mv.from_square), []).append(chess.square_name(mv.to_square))
+        return out
+
+    def termination(self):
+        outcome = self.board.outcome(claim_draw=True)
+        return outcome.termination.name.lower() if outcome else ""
+
+    def winner(self):
+        outcome = self.board.outcome(claim_draw=True)
+        if outcome and outcome.winner is not None:
+            return "w" if outcome.winner == chess.WHITE else "b"
+        return ""
 
     def reset_board(self):
         self.board = chess.Board()
         self.fen = chess.STARTING_FEN
         self.moves = []
+        self.last_uci = ""
         self.result = ""
         self.clocks = {"w": self.tc_base, "b": self.tc_base}
 
@@ -238,6 +265,7 @@ def run_match(st, my_run):
                         break
                     san = st.board.san(res.move)
                     st.board.push(res.move)
+                    st.last_uci = res.move.uci()
                     st.fen = st.board.fen()
                     st.moves.append(san)
                     st.moves = st.moves[-40:]
@@ -303,9 +331,13 @@ body{margin:0;background:#a8a8a8;color:#1a1a1a;font:13px "Segoe UI",Tahoma,Arial
 .sw.black{background:#1a1a1a}
 .sw.white{background:#fff}
 .board{display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);width:100%;aspect-ratio:1/1;flex:0 0 auto;border:1px solid #8a8a8a;margin:1px 0}
-.sq{display:flex;align-items:center;justify-content:center;aspect-ratio:1/1;min-width:0;min-height:0;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent}
+.sq{position:relative;display:flex;align-items:center;justify-content:center;aspect-ratio:1/1;min-width:0;min-height:0;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent}
 .sq.light{background:#f0d9b5}.sq.dark{background:#b58863}
+.sq.last{background-image:linear-gradient(rgba(255,214,102,.32),rgba(255,214,102,.32))}
 .sq.sel{box-shadow:inset 0 0 0 3px #2f6fb0}
+.sq.capture{box-shadow:inset 0 0 0 4px rgba(180,58,48,.62)}
+.sq.check{box-shadow:inset 0 0 0 4px rgba(196,42,42,.72)}
+.dot{position:absolute;width:24%;height:24%;border-radius:50%;background:rgba(30,26,22,.38);pointer-events:none}
 .piece{width:88%;height:88%;object-fit:contain;pointer-events:none;display:block}
 .dock{background:#f0f0f0;border-left:1px solid #bdbdbd;display:flex;flex-direction:column;min-height:0}
 .tabstrip{display:flex;background:#e4e4e4;border-bottom:1px solid #bdbdbd;padding-top:3px}
@@ -315,6 +347,8 @@ body{margin:0;background:#a8a8a8;color:#1a1a1a;font:13px "Segoe UI",Tahoma,Arial
 .dockinfo{margin:0 8px 8px;background:#fff;border:1px solid #bdbdbd;padding:7px 9px;font-size:12px}
 .dockinfo div{display:flex;justify-content:space-between;padding:2px 0}
 .dockinfo b{font-weight:600;color:#555}
+.win{color:#1f7a3f}
+.loss{color:#a12a2a}
 .statusbar{display:flex;gap:16px;border-top:1px solid #b5b5b5;background:#ececec;padding:4px 9px;font-size:12px;color:#333}
 .statusbar .grow{flex:1}
 .credit{color:#777;font-size:11px}
@@ -426,15 +460,24 @@ function parseFen(fen){
   return out;
 }
 function squareName(row,col){return "abcdefgh"[col]+(8-row);}
+function kingSquare(fen){var pieces=parseFen(fen),side=fen.split(" ")[1],target=side==="w"?"K":"k";for(var sq in pieces)if(pieces[sq]===target)return sq;return "";}
 function renderBoard(fen){
   var board=document.getElementById("board"), pieces=parseFen(fen);
+  var targets=(selected&&STATE.legal&&STATE.legal[selected])?STATE.legal[selected]:[];
+  var lastFrom=STATE.last_uci?STATE.last_uci.slice(0,2):"";
+  var lastTo=STATE.last_uci?STATE.last_uci.slice(2,4):"";
+  var checkSq=STATE.check?kingSquare(fen):"";
   board.innerHTML="";
   for(var row=0;row<8;row++)for(var col=0;col<8;col++){
     var name=squareName(row,col), d=document.createElement("div");
     d.className="sq "+((row+col)%2===0?"light":"dark");
     d.dataset.square=name;
     if(selected&&name===selected)d.className+=" sel";
-    var p=pieces[name];
+    if(name===lastFrom||name===lastTo)d.className+=" last";
+    if(name===checkSq)d.className+=" check";
+    var p=pieces[name], isTarget=targets.indexOf(name)>=0;
+    if(isTarget&&!p){var dot=document.createElement("span");dot.className="dot";d.appendChild(dot);}
+    if(isTarget&&p)d.className+=" capture";
     if(p){var s=document.createElement("img");s.className="piece";s.alt=UNICODE[p]||"";s.src="/pieces/"+(PIECE_FILE[p]||"")+".svg";d.appendChild(s);}
     d.onclick=onSquareClick;
     board.appendChild(d);
@@ -475,15 +518,35 @@ function fmtMoves(moves){
 function applyState(s){
   STATE=s;
   sideHuman={w:!!s.white_human,b:!!s.black_human};
-  var st=s.status==="playing"?(s.thinking?"Thinking...":"Playing"):"Idle";
-  document.getElementById("statusText").textContent=st;
+  var st="Idle", cls="";
+  if(s.status==="playing"){
+    st=s.thinking?"Thinking...":"Playing";
+    if(s.check)st+=" (check)";
+  }
+  if(s.termination&&(s.status==="finished"||s.status==="between_games")){
+    var term=s.termination.replace(/_/g," ");
+    if(s.winner){
+      var bothHuman=s.white_human&&s.black_human;
+      var oneHuman=s.white_human!==s.black_human;
+      var youWon=oneHuman&&((s.winner==="w"&&s.white_human)||(s.winner==="b"&&s.black_human));
+      var who=s.winner==="w"?(bothHuman?"White":(s.white_name||"White")):(bothHuman?"Black":(s.black_name||"Black"));
+      st=youWon?"You won by "+term:who+" won by "+term;
+      cls=youWon?"win":"loss";
+    }else{
+      st="Draw by "+term;
+    }
+  }
+  var stEl=document.getElementById("statusText");
+  stEl.textContent=st;
+  stEl.className="val "+cls;
   document.getElementById("statusMessage").textContent=st;
-  document.getElementById("whiteName").textContent=s.white_name||"White";
-  document.getElementById("blackName").textContent=s.black_name||"Black";
+  var bothHuman=s.white_human&&s.black_human;
+  document.getElementById("whiteName").textContent=bothHuman?"White":(s.white_name||"White");
+  document.getElementById("blackName").textContent=bothHuman?"Black":(s.black_name||"Black");
   document.getElementById("whiteClock").textContent=fmtClock(s.clocks.w);
   document.getElementById("blackClock").textContent=fmtClock(s.clocks.b);
   document.getElementById("score").textContent="+"+s.stats.w+" = "+s.stats.d+" - "+s.stats.l;
-  document.getElementById("result").textContent=s.result||"-";
+  document.getElementById("result").textContent=s.result?((s.winner?(s.winner==="w"?"White":"Black")+" wins · ":"Draw · ")+s.result):"-";
   document.getElementById("moves").textContent=fmtMoves(s.moves);
   document.getElementById("gameInfo").textContent=s.white_name&&s.black_name?(s.white_name+" vs "+s.black_name+(s.nodes?" ("+s.nodes+" nodes)":" ("+s.tc_base+"s+"+s.tc_inc+"s)")):"No game";
   document.getElementById("enginesLabel").textContent="Engines: "+((s.engines||[]).join(", ")||"-");
@@ -582,6 +645,7 @@ def _engine_respond(st):
                 if res.move is not None and res.move in st.board.legal_moves:
                     san = st.board.san(res.move)
                     st.board.push(res.move)
+                    st.last_uci = res.move.uci()
                     st.fen = st.board.fen()
                     st.moves.append(san)
                     st.moves = st.moves[-40:]
@@ -669,6 +733,7 @@ def make_handler():
                         return
                     san = st.board.san(mv)
                     st.board.push(mv)
+                    st.last_uci = mv.uci()
                     st.fen = st.board.fen()
                     st.moves.append(san)
                     st.moves = st.moves[-40:]
@@ -725,8 +790,8 @@ def make_handler():
                 st.thinking = False
                 st.mode = "match" if (not st.white_human or not st.black_human) and games > 1 else "human"
                 if st.white_human and st.black_human:
-                    st.mode = "idle"
-                    st.status = "idle"
+                    st.mode = "human"
+                    st.status = "playing"
                     self._json({"ok": True, "state": st.snapshot()})
                     return
                 if st.white_human or st.black_human:
