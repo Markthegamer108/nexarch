@@ -41,9 +41,12 @@ has the list, what each one does, their licenses and where to download them.
 | Gen 0 | nothing, it just counts material | starting point |
 | Gen 1 | Gen 0's self-play games | +124 Elo vs Gen 0 |
 | Gen 2 | Gen 0's games, scored by Stockfish | +129 Elo vs Gen 1 |
-| Gen 3 | Gen 2's games, scored by the whole panel and Lc0 | Currently in Self play session |
+| Gen 3 | Gen 2's games (33.5M positions), scored by the whole panel and Lc0 | training now: four sizes, up to 2048 neurons |
+| Gen 4 | Gen 2's and Gen 3's games, plus Leela's public training data | getting the data ready |
 
-Each match was 400 games at 5,000 nodes per move, so take the exact numbers with a grain of salt.
+Gen 1 and Gen 2 were tested with 400 games at 5,000 nodes per move. From Gen 3 on, every candidate plays
+the previous generation with a fixed time per move instead, so a bigger, slower network has to earn its
+size. Either way, take the exact numbers with a grain of salt.
 For reference, Stockfish 19 is about 3650 on CCRL. If Nexarch ever gets close, I'll submit it to CCRL
 so it gets tested properly, instead of me just saying it's strong.
 
