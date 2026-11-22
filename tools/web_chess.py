@@ -71,6 +71,7 @@ class State:
         self.black_human = False
         self.status = "idle"
         self.result = ""
+        self.end_reason = ""
         self.moves = []
         self.last_uci = ""
         self.stats = {"w": 0, "d": 0, "l": 0, "done": 0}
@@ -113,6 +114,7 @@ class State:
                 "legal": self.legal_map(),
                 "check": self.board.is_check(),
                 "termination": self.termination(),
+                "end_reason": self.end_reason,
                 "winner": self.winner(),
                 "engines": [e["name"] for e in self.engines],
             }
@@ -143,6 +145,7 @@ class State:
         self.moves = []
         self.last_uci = ""
         self.result = ""
+        self.end_reason = ""
         self.clocks = {"w": self.tc_base, "b": self.tc_base}
 
     def open_engine(self, name):
@@ -256,6 +259,7 @@ def run_match(st, my_run):
                         st.clocks[key] -= spent
                         if st.clocks[key] < 0:
                             st.result = "0-1" if turn == chess.WHITE else "1-0"
+                            st.end_reason = ("White" if turn == chess.WHITE else "Black") + " loses on time"
                             st.status = "finished"
                             st.thinking = False
                             break
@@ -323,7 +327,9 @@ body{margin:0;background:#a8a8a8;color:#1a1a1a;font:13px "Segoe UI",Tahoma,Arial
 .sep{width:1px;height:22px;background:#c8c8c8;margin:0 6px}
 .gameinfo{margin-left:auto;font-size:11px;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:420px}
 .main{display:grid;grid-template-columns:1fr 268px;flex:1;min-height:0}
-.boardarea{padding:14px;display:flex;flex-direction:column;justify-content:center;background:#f0f0f0}
+.boardarea{padding:14px;display:flex;flex-direction:column;justify-content:center;background:#f0f0f0;position:relative}
+.banner{display:none;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:rgba(240,240,240,.96);border:1px solid #777;box-shadow:0 4px 18px rgba(0,0,0,.3);padding:9px 18px;font-size:15px;font-weight:600;white-space:nowrap;z-index:2}
+.banner.show{display:block}
 .player{display:flex;justify-content:space-between;align-items:center;background:#e9e9e9;border:1px solid #bdbdbd;padding:5px 9px;font-size:13px}
 .player .name{font-weight:600;display:flex;align-items:center;gap:6px}
 .player .clock{font:13px "Consolas",monospace;background:#fff;border:1px solid #b5b5b5;padding:1px 7px;min-width:58px;text-align:right}
@@ -408,6 +414,7 @@ body{margin:0;background:#a8a8a8;color:#1a1a1a;font:13px "Segoe UI",Tahoma,Arial
       <div class="player"><span class="name"><span class="sw black"></span><span id="blackName">Black</span></span><span class="clock" id="blackClock">5:00.0</span></div>
       <div class="board" id="board"></div>
       <div class="player"><span class="name"><span class="sw white"></span><span id="whiteName">White</span></span><span class="clock" id="whiteClock">5:00.0</span></div>
+      <div class="banner" id="endBanner"></div>
     </div>
     <div class="dock">
       <div class="tabstrip"><span class="tab active">Moves</span><span class="tab">Info</span></div>
@@ -523,22 +530,36 @@ function applyState(s){
     st=s.thinking?"Thinking...":"Playing";
     if(s.check)st+=" (check)";
   }
-  if(s.termination&&(s.status==="finished"||s.status==="between_games")){
-    var term=s.termination.replace(/_/g," ");
-    if(s.winner){
-      var bothHuman=s.white_human&&s.black_human;
-      var oneHuman=s.white_human!==s.black_human;
-      var youWon=oneHuman&&((s.winner==="w"&&s.white_human)||(s.winner==="b"&&s.black_human));
-      var who=s.winner==="w"?(bothHuman?"White":(s.white_name||"White")):(bothHuman?"Black":(s.black_name||"Black"));
-      st=youWon?"You won by "+term:who+" won by "+term;
-      cls=youWon?"win":"loss";
+  if((s.status==="finished"||s.status==="between_games")&&(s.termination||s.end_reason)){
+    if(s.end_reason){
+      st=s.end_reason;
+      cls=s.end_reason.indexOf("loses")>=0?"loss":"win";
+    }else if(s.termination==="checkmate"){
+      st=(s.winner==="w"?"White":"Black")+" mates";
+      cls="win";
+    }else if(s.termination==="stalemate"){
+      st="Draw by stalemate";
+    }else if(s.termination==="insufficient_material"){
+      st="Draw by insufficient mating material";
+    }else if(s.termination==="fifty_moves"){
+      st="Draw by fifty moves rule";
+    }else if(s.termination==="threefold_repetition"){
+      st="Draw by 3-fold repetition";
+    }else if(s.termination==="seventyfive_moves"){
+      st="Draw by seventy-five moves rule";
+    }else if(s.termination==="fivefold_repetition"){
+      st="Draw by fivefold repetition";
     }else{
-      st="Draw by "+term;
+      st="Draw by "+s.termination.replace(/_/g," ");
     }
   }
   var stEl=document.getElementById("statusText");
   stEl.textContent=st;
   stEl.className="val "+cls;
+  var banner=document.getElementById("endBanner");
+  var ended=s.status==="finished"||s.status==="between_games";
+  banner.textContent=st;
+  banner.className=ended&&(s.termination||s.end_reason)?"banner show":"banner";
   document.getElementById("statusMessage").textContent=st;
   var bothHuman=s.white_human&&s.black_human;
   document.getElementById("whiteName").textContent=bothHuman?"White":(s.white_name||"White");
@@ -638,6 +659,7 @@ def _engine_respond(st):
                     st.clocks[key] -= spent
                     if st.clocks[key] < 0:
                         st.result = "0-1" if eng_side == chess.WHITE else "1-0"
+                        st.end_reason = ("White" if eng_side == chess.WHITE else "Black") + " loses on time"
                         st.status = "finished"
                         st.thinking = False
                         return
