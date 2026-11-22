@@ -42,7 +42,7 @@ has the list, what each one does, their licenses and where to download them.
 | Gen 1 | Gen 0's self-play games | +124 Elo vs Gen 0 |
 | Gen 2 | Gen 0's games, scored by Stockfish | +129 Elo vs Gen 1 |
 | Gen 3 | Gen 2's games (33.5M positions), scored by the whole panel and Lc0 | training now: four sizes, up to 2048 neurons |
-| Gen 4 | Gen 2's and Gen 3's games, plus Leela's public training data | getting the data ready |
+| Gen 4 | 560M positions: Gen 2's graded games, Leela's public training data and the Lichess evaluations | data ready, trains right after Gen 3 |
 
 Gen 1 and Gen 2 were tested with 400 games at 5,000 nodes per move. From Gen 3 on, every candidate plays
 the previous generation with a fixed time per move instead, so a bigger, slower network has to earn its
