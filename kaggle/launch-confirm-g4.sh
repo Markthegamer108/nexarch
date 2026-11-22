@@ -7,7 +7,8 @@ mkdir -p kaggle-out
 say "waiting for Gen 4 to finish"
 while [ ! -f kaggle-out/nexarch-train-g4.done ]; do sleep 60; done
 grep -q 'COMPLETE' kaggle-out/nexarch-train-g4.done || { say "Gen 4 did not complete: not confirming"; exit 1; }
-[ -s kaggle-out/nexarch-train-g4/nexarch-g4.nnue ] || { say "no Gen 4 network in kaggle-out/nexarch-train-g4"; exit 1; }
+{ [ -s kaggle-out/nexarch-train-g4/nexarch-g4.nnue ] || [ -s kaggle-out/nexarch-train-g4/g4-a.nnue ] \
+  || [ -s kaggle-out/nexarch-train-g4/g4-b.nnue ]; } || { say "no Gen 4 network in kaggle-out/nexarch-train-g4"; exit 1; }
 ST=$(kernel_state nexarch-confirm-g4)
 if [ -n "$ST" ]; then
   say "nexarch-confirm-g4 already exists ($ST): watching it instead of pushing again"
