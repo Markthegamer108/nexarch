@@ -97,6 +97,15 @@ Grading takes the longest. Every worker runs around 30 engines at once and uses 
 don't start too many. I do most of the heavy stuff on Kaggle, and the scripts for that are in
 `kaggle/`.
 
+## Credits
+
+A lot of other people's work goes into Nexarch: the 32 engines and networks that grade its training data,
+Leela Chess Zero's public training data, the Lichess evaluation database, Stockfish's data tools, and the
+libraries and free computers it all runs on. [CREDITS.md](CREDITS.md) lists every one of them.
+
+From Gen 4 on, Nexarch's networks contain information from the Leela Chess Zero training data, which is made
+available under the [ODbL v1.0](https://opendatacommons.org/licenses/odbl/1-0/).
+
 ## License
 
 MIT, see [LICENSE](LICENSE).
