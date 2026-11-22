@@ -216,6 +216,7 @@ def main_stream(args, dev):
     pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
     first = pool.submit(load, chunks_of(epoch_order(1))[0])
 
+    step_limit = None
     if args.time_budget:
         model.train()
         cu, ct, cy = first.result()
@@ -230,26 +231,30 @@ def main_stream(args, dev):
                 torch.cuda.synchronize()
             return (time.time() - t0) / k
         seconds_per_step(3, 0)
-        per_epoch = seconds_per_step(20, 3) * steps_per_epoch * 1.1
+        per_step = seconds_per_step(20, 3) * 1.1
         opt.zero_grad(set_to_none=True)
         del tr
-        fit = max(1, int(args.time_budget * 60 // per_epoch))
-        print(f"time budget {args.time_budget:.0f} min, about {per_epoch / 60:.1f} min per epoch: "
-              + (f"{args.epochs} epochs fit" if fit >= args.epochs else f"training {fit} epochs instead of {args.epochs}"),
+        planned = int(args.time_budget * 60 / per_step)
+        step_limit = max(1, min(steps_per_epoch * args.epochs, planned))
+        full_epochs = step_limit // steps_per_epoch
+        args.epochs = max(1, -(-step_limit // steps_per_epoch))
+        print(f"time budget {args.time_budget:.0f} min, {per_step * 1000:.0f} ms per step: "
+              f"{step_limit:,} steps, {full_epochs} full epoch(s) and {step_limit - full_epochs * steps_per_epoch:,} more",
               flush=True)
-        args.epochs = min(args.epochs, fit)
 
-    total_steps = steps_per_epoch * args.epochs
+    total_steps = step_limit or steps_per_epoch * args.epochs
     warmup = min(200, total_steps // 10 + 1)
     sched = torch.optim.lr_scheduler.LambdaLR(
         opt, lambda s: min(1.0, (s + 1) / warmup) * (0.02 + 0.98 * 0.5 * (1 + math.cos(math.pi * min(s, total_steps) / total_steps))))
     print(f"training {n_train:,} positions, {args.epochs} epochs x {steps_per_epoch} steps, hidden {args.hidden}", flush=True)
     start = time.time()
+    done = 0
     for epoch in range(1, args.epochs + 1):
         model.train()
         chunks = chunks_of(epoch_order(epoch))
         pending = first if epoch == 1 else pool.submit(load, chunks[0])
         running, steps = 0.0, 0
+        stop = False
         for c in range(len(chunks)):
             cu, ct, cy = pending.result()
             if c + 1 < len(chunks):
@@ -259,6 +264,9 @@ def main_stream(args, dev):
             m = len(tr[2])
             perm = torch.randperm(m, device=dev)
             for i in range(max(1, m // args.batch)):
+                if step_limit is not None and done >= step_limit:
+                    stop = True
+                    break
                 idx = perm[i * args.batch:(i + 1) * args.batch]
                 loss = loss_on(tr[0][idx], tr[1][idx], tr[2][idx])
                 opt.zero_grad(set_to_none=True)
@@ -268,7 +276,10 @@ def main_stream(args, dev):
                 sched.step()
                 running += loss.item()
                 steps += 1
+                done += 1
             del tr, perm
+            if stop:
+                break
         model.eval()
         with torch.no_grad():
             val = sum(loss_on(va[0][j:j + 65536], va[1][j:j + 65536], va[2][j:j + 65536]).item() * len(va[2][j:j + 65536])
@@ -277,6 +288,9 @@ def main_stream(args, dev):
               f"{time.time() - start:.0f}s", flush=True)
         export(model, args.out)
         torch.save(model.state_dict(), args.out.rsplit(".", 1)[0] + ".pt")
+        if stop:
+            print(f"time budget reached after {done:,} steps", flush=True)
+            break
     pool.shutdown()
     q = quantize(model)
     with torch.no_grad():
@@ -337,6 +351,7 @@ def main():
     def loss_on(u, t, y):
         return (torch.sigmoid(model(u.long(), t.long())) - y).square().mean()
 
+    step_limit = None
     if args.time_budget:
         model.train()
         probe = torch.randperm(len(train_idx), device=dev)
@@ -352,27 +367,34 @@ def main():
             return (time.time() - t) / k
 
         seconds_per_step(3)
-        per_epoch = seconds_per_step(20) * steps_per_epoch * 1.1
+        per_step = seconds_per_step(20) * 1.1
         opt.zero_grad(set_to_none=True)
         del probe
-        fit = max(1, int(args.time_budget * 60 // per_epoch))
-        print(f"time budget {args.time_budget:.0f} min, about {per_epoch / 60:.1f} min per epoch: "
-              + (f"{args.epochs} epochs fit" if fit >= args.epochs else f"training {fit} epochs instead of {args.epochs}"),
+        planned = int(args.time_budget * 60 / per_step)
+        step_limit = max(1, min(steps_per_epoch * args.epochs, planned))
+        full_epochs = step_limit // steps_per_epoch
+        args.epochs = max(1, -(-step_limit // steps_per_epoch))
+        print(f"time budget {args.time_budget:.0f} min, {per_step * 1000:.0f} ms per step: "
+              f"{step_limit:,} steps, {full_epochs} full epoch(s) and {step_limit - full_epochs * steps_per_epoch:,} more",
               flush=True)
-        args.epochs = min(args.epochs, fit)
 
-    total_steps = steps_per_epoch * args.epochs
+    total_steps = step_limit or steps_per_epoch * args.epochs
     warmup = min(200, total_steps // 10 + 1)
     sched = torch.optim.lr_scheduler.LambdaLR(
         opt, lambda s: min(1.0, (s + 1) / warmup) * (0.02 + 0.98 * 0.5 * (1 + math.cos(math.pi * min(s, total_steps) / total_steps))))
 
     print(f"training {len(train_idx):,} positions, {args.epochs} epochs x {steps_per_epoch} steps, hidden {args.hidden}", flush=True)
     start = time.time()
+    done = 0
     for epoch in range(1, args.epochs + 1):
         model.train()
         perm = torch.randperm(len(train_idx), device=dev)
         running = 0.0
+        stop = False
         for i in range(steps_per_epoch):
+            if step_limit is not None and done >= step_limit:
+                stop = True
+                break
             idx = perm[i * args.batch:(i + 1) * args.batch]
             loss = loss_on(tr[0][idx], tr[1][idx], tr[2][idx])
             opt.zero_grad(set_to_none=True)
@@ -381,12 +403,16 @@ def main():
             model.clip()
             sched.step()
             running += loss.item()
+            done += 1
         model.eval()
         with torch.no_grad():
             val = sum(loss_on(va[0][j:j + 65536], va[1][j:j + 65536], va[2][j:j + 65536]).item() * len(va[2][j:j + 65536])
                       for j in range(0, n_val, 65536)) / n_val
-        print(f"epoch {epoch:3d}  train {running / steps_per_epoch:.5f}  val {val:.5f}  lr {sched.get_last_lr()[0]:.2e}  "
+        print(f"epoch {epoch:3d}  train {running / max(1, done - (epoch - 1) * steps_per_epoch):.5f}  val {val:.5f}  lr {sched.get_last_lr()[0]:.2e}  "
               f"{time.time() - start:.0f}s", flush=True)
+        if stop:
+            print(f"time budget reached after {done:,} steps", flush=True)
+            break
 
     export(model, args.out)
     torch.save(model.state_dict(), args.out.rsplit(".", 1)[0] + ".pt")

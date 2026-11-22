@@ -10,7 +10,7 @@ import tarfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 OWNER = "markthegamer108"
-INCLUDE = ["engine/Makefile", "engine/src", "trainer", "tools", "kaggle/job.py", "kaggle/setup-engines.sh", "kaggle/lc0-setup.sh", "kaggle/train-g3.sh", "kaggle/train-g4.sh", "nets"]
+INCLUDE = ["engine/Makefile", "engine/src", "trainer", "tools", "kaggle/job.py", "kaggle/setup-engines.sh", "kaggle/lc0-setup.sh", "kaggle/train-g3.sh", "kaggle/train-g4.sh", "kaggle/confirm-g4.sh", "nets"]
 SKIP_SUFFIX = {".pt", ".pyc", ".bin"}
 
 TEMPLATE = '''#!/usr/bin/env python3

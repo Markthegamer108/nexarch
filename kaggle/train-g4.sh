@@ -5,9 +5,9 @@ CPUS=${2:-4}
 cd "$(dirname "$0")/.."
 IN=${G4_INPUT:-/kaggle/input}
 MOVETIME=${G4_MOVETIME:-200}
-GAMES=${G4_GAMES:-300}
-FINAL_GAMES=${G4_FINAL_GAMES:-400}
-BUDGET=${G4_BUDGET:-480}
+GAMES=${G4_GAMES:-150}
+FINAL_GAMES=${G4_FINAL_GAMES:-0}
+BUDGET=${G4_BUDGET:-240}
 STREAM=${G4_STREAM:-16000000}
 EPOCHS=${G4_EPOCHS:-8}
 G3=$(find "$IN" -name nexarch-g3.pt -print -quit)
@@ -49,7 +49,11 @@ for name in g4-a g4-b; do
 done
 [ ${#PICK[@]} -gt 0 ] || { echo "no candidate survived training"; exit 1; }
 python trainer/pick_best.py "$OUT/nexarch-g4.nnue" "${PICK[@]}" | tee "$OUT/pick.txt" || exit 1
-./engine/nexarch match a="$OUT/nexarch-g4.nnue" b="$G3N" games="$FINAL_GAMES" movetime="$MOVETIME" threads="$CPUS" \
-  seed=20261124 | tee "$OUT/vs-g3.txt" | tail -1
-./engine/nexarch match a="$OUT/nexarch-g4.nnue" b=nets/nexarch-g2.nnue games="$FINAL_GAMES" movetime="$MOVETIME" \
-  threads="$CPUS" seed=20261125 | tee "$OUT/vs-g2.txt" | tail -1
+if [ "$FINAL_GAMES" -gt 0 ]; then
+  ./engine/nexarch match a="$OUT/nexarch-g4.nnue" b="$G3N" games="$FINAL_GAMES" movetime="$MOVETIME" threads="$CPUS" \
+    seed=20261124 | tee "$OUT/vs-g3.txt" | tail -1
+  ./engine/nexarch match a="$OUT/nexarch-g4.nnue" b=nets/nexarch-g2.nnue games="$FINAL_GAMES" movetime="$MOVETIME" \
+    threads="$CPUS" seed=20261125 | tee "$OUT/vs-g2.txt" | tail -1
+else
+  echo "confirmation matches left for a CPU run"
+fi
