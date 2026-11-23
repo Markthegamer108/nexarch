@@ -9,7 +9,12 @@ NET=${SELFPLAY_NET:-nets/current.nnue}
 echo "$(date -u '+%F %T') aws self-play: $(nproc) vCPU, $THREADS threads, $NODES nodes, ${CHUNK}s chunks, $NET"
 while true; do
   N=$(date -u '+%Y%m%d-%H%M%S')
+  OUT="data/aws/sp-$N.bin"
+  rm -f "$OUT.open"
   ./engine/nexarch datagen threads="$THREADS" nodes="$NODES" seconds="$CHUNK" seed="$N$RANDOM" \
-    out="data/aws/sp-$N.bin" net="$NET" >> kaggle-out/aws-selfplay.log 2>&1 < /dev/null
-  tail -1 kaggle-out/aws-selfplay.log
+    out="$OUT.open" net="$NET" >> kaggle-out/aws-selfplay.log 2>&1 < /dev/null
+  if [ -s "$OUT.open" ]; then
+    mv -f "$OUT.open" "$OUT"
+    tail -1 kaggle-out/aws-selfplay.log
+  fi
 done
