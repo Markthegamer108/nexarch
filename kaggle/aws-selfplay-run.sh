@@ -2,7 +2,7 @@
 set -u
 cd "$(dirname "$0")/.."
 mkdir -p data/aws kaggle-out
-THREADS=${SELFPLAY_THREADS:-$(( $(nproc) - 2 ))}
+THREADS=${SELFPLAY_THREADS:-$(nproc)}
 NODES=${SELFPLAY_NODES:-5000}
 CHUNK=${SELFPLAY_CHUNK:-1800}
 NET=${SELFPLAY_NET:-nets/current.nnue}
