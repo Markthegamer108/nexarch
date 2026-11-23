@@ -29,8 +29,12 @@ train() {
 }
 
 if [ "${G5_SEQ:-0}" = 1 ]; then
-  train g5-a 0 2048 "$S2048" 0.0006 8192
+  [ "${G5_ONLY:-both}" = g5-b ] || train g5-a 0 2048 "$S2048" 0.0006 8192
+  [ "${G5_ONLY:-both}" = g5-a ] || train g5-b 0 4096 "$S4096" 0.0004 4096
+elif [ "${G5_ONLY:-both}" = g5-b ]; then
   train g5-b 0 4096 "$S4096" 0.0004 4096
+elif [ "${G5_ONLY:-both}" = g5-a ]; then
+  train g5-a 0 2048 "$S2048" 0.0006 8192
 else
   ( train g5-a 0 2048 "$S2048" 0.0006 8192 ) &
   ( train g5-b 1 4096 "$S4096" 0.0004 4096 ) &

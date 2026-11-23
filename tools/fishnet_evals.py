@@ -4,14 +4,30 @@ import os
 import subprocess
 import sys
 import time
-
-import pyarrow.parquet as pq
+import urllib.request
 
 MATE_CP = 10000
+BASE = "https://huggingface.co/datasets/Lichess/fishnet-evals/resolve/main/"
 
 
-def convert(path, out, engine, batch, every, limit):
-    pf = pq.ParquetFile(path)
+def token():
+    for p in (os.path.expanduser("~/.cache/huggingface/token"),):
+        if os.path.exists(p):
+            return open(p).read().strip()
+    return os.environ.get("HF_TOKEN", "")
+
+
+def pull(name, dest, start, end):
+    url = BASE + name
+    req = urllib.request.Request(url, headers={"Authorization": "Bearer " + token()} if token() else {})
+    req.add_header("Range", f"bytes={start}-{end}")
+    with urllib.request.urlopen(req, timeout=300) as r:
+        return r.read()
+
+
+def convert(parquet, out, engine, batch, every, limit):
+    import pyarrow.parquet as pq
+    pf = pq.ParquetFile(parquet)
     proc = subprocess.Popen([engine, "packfens", f"out={out}"], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     rows = emitted = 0
     t = time.time()
@@ -44,13 +60,13 @@ def convert(path, out, engine, batch, every, limit):
         if lines:
             proc.stdin.write(("\n".join(lines) + "\n").encode())
         if rows % (batch * 20) < batch:
-            print(f"{path}: {rows:,} rows, {emitted:,} written, {rows / max(time.time() - t, 1e-9):,.0f} rows/s", flush=True)
+            print(f"{parquet}: {rows:,} rows, {emitted:,} written, {rows / max(time.time() - t, 1e-9):,.0f} rows/s", flush=True)
         if stop:
             break
     proc.stdin.close()
     report = proc.stdout.read().decode().strip()
     if proc.wait() != 0:
-        raise SystemExit(f"{path}: nexarch packfens failed")
+        raise SystemExit(f"{parquet}: nexarch packfens failed")
     return rows, emitted, report
 
 

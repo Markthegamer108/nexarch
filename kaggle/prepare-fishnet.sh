@@ -4,6 +4,8 @@ cd "$(dirname "$0")/.."
 MONTH=${1:?month, e.g. 2025-01}
 EVERY=${2:-1}
 LOG=kaggle-out/prepare-fishnet-$MONTH.log
+exec 9>"kaggle-out/.fishnet-$MONTH.lock"
+flock -n 9 || { echo "$MONTH is already being prepared by another process" >> "$LOG"; exit 1; }
 mkdir -p kaggle-out data/fishnet
 . kaggle/lib.sh
 FILE=standard_rated_${MONTH/-/_}.parquet
@@ -22,7 +24,7 @@ done
 say "downloaded and verified"
 
 if [ ! -f "$OUT.rescaled" ]; then
-  rm -f "$OUT"
+  rm -f "$OUT" "$OUT.done" "$OUT.rescaled"
   .venv/bin/python tools/fishnet_evals.py "$DL" --out-dir data/fishnet --every "$EVERY" --batch 500000 >> "$LOG" 2>&1 \
     || { say "CONVERSION FAILED"; exit 1; }
   say "converted: $(( $(stat -c %s "$OUT") / 32 )) positions -> $OUT"
@@ -31,14 +33,19 @@ if [ ! -f "$OUT.rescaled" ]; then
 fi
 
 N=$(( $(stat -c %s "$OUT") / 32 ))
-D=$HOME/.cache/nexarch-kds/nexarch-fishnet-$MONTH
-mkdir -p "$D"
-ln -f "$OUT" "$D/fishnet-$MONTH.bin" 2>/dev/null || cp "$OUT" "$D/fishnet-$MONTH.bin"
-printf '{"title":"nexarch-fishnet-%s","id":"markthegamer108/nexarch-fishnet-%s","licenses":[{"name":"CC0-1.0"}]}\n' "$MONTH" "$MONTH" > "$D/dataset-metadata.json"
-upload_dataset nexarch-fishnet-$MONTH "$D" "Lichess fishnet evaluations $MONTH, 1 in $EVERY, $N positions, Nexarch format" \
-  || { say "UPLOAD FAILED"; exit 1; }
-touch "data/fishnet/fishnet-$MONTH.done"
-say "ready: markthegamer108/nexarch-fishnet-$MONTH, $N positions"
+if [ -n "${HF_REPO:-}" ]; then
+  .venv/bin/hf upload "$HF_REPO" "$OUT" "fishnet-$MONTH.bin" --repo-type dataset >> "$LOG" 2>&1 \
+    || { say "HF UPLOAD FAILED"; exit 1; }
+  say "ready: https://huggingface.co/datasets/$HF_REPO/fishnet-$MONTH.bin, $N positions"
+else
+  D=$HOME/.cache/nexarch-kds/nexarch-fishnet-$MONTH
+  mkdir -p "$D"
+  ln -f "$OUT" "$D/fishnet-$MONTH.bin" 2>/dev/null || cp "$OUT" "$D/fishnet-$MONTH.bin"
+  printf '{"title":"nexarch-fishnet-%s","id":"markthegamer108/nexarch-fishnet-%s","licenses":[{"name":"CC0-1.0"}]}\n' "$MONTH" "$MONTH" > "$D/dataset-metadata.json"
+  upload_dataset nexarch-fishnet-$MONTH "$D" "Lichess fishnet evaluations $MONTH, 1 in $EVERY, $N positions, Nexarch format" \
+    || { say "UPLOAD FAILED"; exit 1; }
+  say "ready: markthegamer108/nexarch-fishnet-$MONTH, $N positions"
+fi
 if [ "${FISHNET_KEEP:-0}" != 1 ]; then
   rm -f "$OUT" "$DL" "$OUT.rescaled"
   say "cleaned local copies of $MONTH"

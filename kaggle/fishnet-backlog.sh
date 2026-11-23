@@ -10,12 +10,15 @@ EVERY=${3:-5}
 say "fishnet backlog: $FROM to $TO, every=$EVERY"
 M=$FROM
 while true; do
-  Y=${M%-*}; MON=${M#*-}
-  N=$(date -d "$Y-$MON-15 +1 month" '+%Y-%m' 2>/dev/null) || { say "bad month $M"; exit 1; }
-  say "=== $M ==="
-  bash kaggle/prepare-fishnet.sh "$M" "$EVERY" || { say "$M failed, stopping here"; exit 1; }
+  if [ -f "data/fishnet/fishnet-$M.done" ]; then
+    say "$M already done, skipping"
+  else
+    say "=== $M ==="
+    bash kaggle/prepare-fishnet.sh "$M" "$EVERY" >> "$LOG" 2>&1 || { say "$M failed, stopping here"; exit 1; }
+    say "$M: $(grep -o 'ready: .*' "$LOG" | tail -1)"
+  fi
   [ "$M" = "$TO" ] && break
-  M=$N
+  M=$(date -d "${M}-15 +1 month" '+%Y-%m') || { say "cannot step past $M"; exit 1; }
 done
 say "fishnet backlog finished: $FROM to $TO"
 touch data/fishnet/backlog.done
