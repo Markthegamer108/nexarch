@@ -21,13 +21,17 @@ if [ ! -f "data/eval/frozen-$MONTH.bin" ]; then
     || { say "conversion failed"; exit 1; }
   SRC=$(ls data/eval/fishnet-standard_rated_${MONTH/-/_}.bin 2>/dev/null | head -1)
   [ -n "$SRC" ] || { say "converted file missing"; exit 1; }
-  .venv/bin/python tools/make_evalset.py --bin "$SRC" --out "data/eval/frozen-$MONTH.bin" --positions "$N" --month "$MONTH" >> "$LOG" 2>&1 \
+  .venv/bin/python tools/dedupe_eval.py --in "$SRC" --out "data/eval/unique-$MONTH.bin" --want "$N" >> "$LOG" 2>&1 \
+    || { say "dedupe failed"; exit 1; }
+  .venv/bin/python tools/make_evalset.py --bin "data/eval/unique-$MONTH.bin" --out "data/eval/frozen-$MONTH.bin" --positions "$N" --month "$MONTH" >> "$LOG" 2>&1 \
     || { say "sampling failed"; exit 1; }
+  rm -f "data/eval/unique-$MONTH.bin"
   rm -f "$SRC" "$SRC.done"
 fi
 
 POS=$(( $(stat -c %s "data/eval/frozen-$MONTH.bin") / 32 ))
-[ "$POS" -eq "$N" ] || { say "expected $N positions, got $POS"; exit 1; }
+[ "$POS" -gt 0 ] || { say "empty eval set"; exit 1; }
+say "eval set: $POS unique positions"
 
 D=$HOME/.cache/nexarch-kds/nexarch-evalset-$MONTH
 mkdir -p "$D"
