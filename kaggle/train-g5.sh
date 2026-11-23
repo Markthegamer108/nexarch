@@ -17,7 +17,8 @@ echo "Gen 5: budget ${BUDGET} min, $EPOCHS epochs, data under $IN"
 train() {
   local name=$1 gpu=$2 hidden=$3 start=$4 lr=$5 batch=$6
   if CUDA_VISIBLE_DEVICES=$gpu "$PY" trainer/train.py --data "${DATA[@]}" --resume "$start" --hidden "$hidden" \
-       --batch "$batch" --lr "$lr" --epochs "$EPOCHS" --wdl 0.4 --time-budget "$BUDGET" --out "$OUT/$name.nnue" \
+       --batch "$batch" --lr "$lr" --epochs "$EPOCHS" --wdl 0.4 --time-budget "$BUDGET" \
+       --stream "${G5_STREAM:-16000000}" --out "$OUT/$name.nnue" \
        > "$OUT/train-$name.txt" 2>&1 \
      && printf 'setoption name EvalFile value %s\nnnuecheck 100\n' "$OUT/$name.nnue" | ./engine/nexarch | tail -1 \
         | tee -a "$OUT/train-$name.txt" | grep -q 'all match'; then
