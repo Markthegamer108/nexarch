@@ -8,7 +8,7 @@
 namespace nnue {
 
 constexpr int INPUTS = 768;
-constexpr int MAX_HIDDEN = 2048;
+constexpr int MAX_HIDDEN = 4096;
 constexpr int QA = 255;
 constexpr int QB = 64;
 constexpr int SCALE = 400;

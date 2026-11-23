@@ -59,6 +59,10 @@ programs, and none of their code is part of Nexarch. What each one judges, and i
   [huggingface.co/datasets/linrock/test80-2024](https://huggingface.co/datasets/linrock/test80-2024).
 - **The Lichess evaluation database**, by [Lichess](https://database.lichess.org/) and everyone who analyses
   positions on the Lichess analysis board. Released under CC0.
+- **The Lichess fishnet evaluation database**, the raw 34.5-billion-position set behind the evaluation
+  database, computed by Lichess's distributed Stockfish analysis (fishnet) and released under CC0 at
+  [huggingface.co/datasets/Lichess/fishnet-evals](https://huggingface.co/datasets/Lichess/fishnet-evals).
+  Nexarch streams monthly slices of it instead of holding the whole thing.
 
 ## Tools and libraries
 

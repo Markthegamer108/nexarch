@@ -1,7 +1,7 @@
 #!/bin/bash
 set -u
 cd "$(dirname "$0")/.."
-DOMAIN=${1:?usage: ngrok-url.sh your-name.ngrok-free.app [port]}
+DOMAIN=${1:-showplace-immunize-output.ngrok-free.dev}
 PORT=${2:-8765}
 NGROK=${NGROK:-$HOME/.local/bin/ngrok}
 [ -x "$NGROK" ] || NGROK=$(command -v ngrok || true)
@@ -15,4 +15,5 @@ NGROK=${NGROK:-$HOME/.local/bin/ngrok}
   exit 1
 }
 echo "Serving the board at https://$DOMAIN"
+echo "Free ngrok shows a one-time browser warning to new visitors."
 exec "$NGROK" http --url="$DOMAIN" "$PORT"

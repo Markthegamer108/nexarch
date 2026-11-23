@@ -3,7 +3,9 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <random>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -75,6 +77,7 @@ i64 Searcher::elapsed_ms() const {
 int Searcher::evaluate(const Position& pos, int ply) {
   int v = net_ ? nnue::evaluate(*net_, acc_[ply], pos.stm) : material_eval(pos);
   v = v * (200 - pos.halfmove) / 200;
+  if (limits_.uci_limit_strength) v = evaluate_with_noise(pos, ply);
   return std::clamp(v, -MATE_BOUND + 1, MATE_BOUND - 1);
 }
 
@@ -83,9 +86,45 @@ int Searcher::static_eval(const Position& pos) {
   return evaluate(pos, 0);
 }
 
+int Searcher::max_depth_limit() const {
+  if (!limits_.uci_limit_strength) return limits_.depth;
+  int elo_depth = std::max(1, (limits_.uci_elo - 1320) / 80);
+  int skill_depth = std::max(1, limits_.skill_level * 2 + 2);
+  return std::min(limits_.depth, std::min(elo_depth, skill_depth));
+}
+
+int Searcher::evaluate_with_noise(const Position& pos, int ply) {
+  int v = net_ ? nnue::evaluate(*net_, acc_[ply], pos.stm) : material_eval(pos);
+  v = v * (200 - pos.halfmove) / 200;
+  if (!limits_.uci_limit_strength) return v;
+  const int elo = limits_.uci_elo;
+  const int skill = limits_.skill_level;
+  double noise_scale = 0.0;
+  if (elo < 3000) noise_scale += (3000.0 - elo) / 12000.0;
+  if (skill < 20) noise_scale += (20 - skill) * 0.02;
+  noise_scale = std::min(noise_scale, 0.5);
+  static thread_local std::mt19937 rng(std::random_device{}());
+  static thread_local std::normal_distribution<double> dist(0.0, 1.0);
+  double noise = dist(rng) * noise_scale * 200.0;
+  return v + int(noise);
+}
+
 int Searcher::corrected(const Position& pos, int raw) const {
   const int correction = correction_[pos.stm][pos.pawn_key % CORRECTION_SIZE] / CORRECTION_GRAIN;
   return std::clamp(raw + correction, -MATE_BOUND + 1, MATE_BOUND - 1);
+}
+
+Move Searcher::pick_move_for_skill(const MoveList& list, const int* scores, Move best_move) const {
+  if (!limits_.uci_limit_strength || limits_.skill_level >= 20) return best_move;
+  int pick_count = std::max(1, limits_.skill_level);
+  if (pick_count >= list.size) return best_move;
+  static thread_local std::mt19937 rng(std::random_device{}());
+  static thread_local std::uniform_int_distribution<int> dist;
+  int pick = dist(rng) % std::min(pick_count, list.size);
+  std::vector<std::pair<int, Move>> scored;
+  for (int i = 0; i < list.size; i++) scored.emplace_back(scores[i], list.moves[i]);
+  std::sort(scored.begin(), scored.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+  return scored[std::min(pick, (int)scored.size() - 1)].second;
 }
 
 void Searcher::update_correction(const Position& pos, int depth, int diff) {
@@ -195,9 +234,10 @@ SearchResult Searcher::go(const Position& root, const Limits& limits) {
     return result;
   }
 
+  int effective_depth = this->max_depth_limit();
   int previous = 0, stability = 0;
   Move last_best = NO_MOVE;
-  for (int depth = 1 + (thread_id & 1); depth <= limits_.depth; depth++) {
+  for (int depth = 1 + (thread_id & 1); depth <= effective_depth; depth++) {
     root_depth_ = depth;
     seldepth_ = 0;
     int delta = 18, alpha = -INF, beta = INF, score = 0;
@@ -219,7 +259,17 @@ SearchResult Searcher::go(const Position& root, const Limits& limits) {
       delta += delta / 2;
     }
     if (stopped_) break;
-    if (pv_len_[0] > 0) result.best = pv_[0][0];
+    if (pv_len_[0] > 0) {
+      Move best = pv_[0][0];
+      if (limits_.uci_limit_strength && limits_.skill_level < 20) {
+        MoveList list;
+        root.gen_moves(list, false);
+        int scores[256];
+        score_moves(root, list, scores, NO_MOVE, 0);
+        best = this->pick_move_for_skill(list, scores, best);
+      }
+      result.best = best;
+    }
     result.score = previous = score;
     result.depth = depth;
     if (print_info) report(depth, score);

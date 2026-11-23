@@ -27,6 +27,9 @@ struct Engine {
   Position pos = Position::startpos();
   std::vector<u64> history;
   int move_overhead = 30;
+  bool uci_limit_strength = false;
+  int uci_elo = 1500;
+  int skill_level = 20;
 
   Engine() {
     tt.resize(64);
@@ -282,6 +285,9 @@ void cmd_go(Engine& e, std::istringstream& in) {
   limits.hard_ms = std::min<i64>(limits.hard_ms ? limits.hard_ms : 3000, 3000);
   limits.soft_ms = std::min<i64>(limits.soft_ms ? limits.soft_ms : 1500, 1500);
   limits.depth = std::clamp(limits.depth, 1, MAX_PLY - 1);
+  limits.uci_limit_strength = e.uci_limit_strength;
+  limits.uci_elo = e.uci_elo;
+  limits.skill_level = e.skill_level;
   for (auto& t : e.threads) {
     t->game_keys = e.history;
     t->set_network(e.use_net ? &e.net : nullptr);
@@ -289,7 +295,7 @@ void cmd_go(Engine& e, std::istringstream& in) {
   e.worker = std::thread([&e, limits, root = e.pos] {
     std::vector<std::thread> helpers;
     for (size_t i = 1; i < e.threads.size(); i++)
-      helpers.emplace_back([&e, i, root] { e.threads[i]->go(root, Limits{}); });
+      helpers.emplace_back([&e, i, root, limits] { e.threads[i]->go(root, limits); });
     const SearchResult r = e.searcher->go(root, limits);
     e.stop = true;
     for (std::thread& h : helpers) h.join();
@@ -319,6 +325,15 @@ void cmd_setoption(Engine& e, std::istringstream& in) {
       e.use_net = e.net.load(value, error);
       std::printf("info string %s\n", e.use_net ? ("loaded network " + value).c_str() : error.c_str());
     }
+  } else if (name == "UCI_LimitStrength") {
+    e.uci_limit_strength = (value == "true" || value == "1");
+    std::printf("info string UCI_LimitStrength set to %s\n", e.uci_limit_strength ? "true" : "false");
+  } else if (name == "UCI_Elo") {
+    e.uci_elo = std::clamp(std::stoi(value), 1320, 3190);
+    std::printf("info string UCI_Elo set to %d\n", e.uci_elo);
+  } else if (name == "Skill Level") {
+    e.skill_level = std::clamp(std::stoi(value), 0, 20);
+    std::printf("info string Skill Level set to %d\n", e.skill_level);
   }
   std::fflush(stdout);
 }
@@ -336,6 +351,9 @@ bool handle(Engine& e, const std::string& line) {
     std::printf("option name Threads type spin default 1 min 1 max 1024\n");
     std::printf("option name Move Overhead type spin default 30 min 0 max 5000\n");
     std::printf("option name EvalFile type string default <none>\n");
+    std::printf("option name UCI_LimitStrength type check default false\n");
+    std::printf("option name UCI_Elo type spin default 1500 min 1320 max 3190\n");
+    std::printf("option name Skill Level type spin default 20 min 0 max 20\n");
     std::printf("uciok\n");
   } else if (cmd == "isready") {
     std::printf("readyok\n");

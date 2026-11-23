@@ -13,6 +13,9 @@ struct Limits {
   u64 soft_nodes = 0;
   i64 soft_ms = 0;
   i64 hard_ms = 0;
+  bool uci_limit_strength = false;
+  int uci_elo = 1500;
+  int skill_level = 20;
 };
 
 struct SearchResult {
@@ -48,6 +51,9 @@ class Searcher {
   int search(const Position& pos, int alpha, int beta, int depth, int ply, bool cutnode);
   int qsearch(const Position& pos, int alpha, int beta, int ply);
   int evaluate(const Position& pos, int ply);
+  int evaluate_with_noise(const Position& pos, int ply);
+  int max_depth_limit() const;
+  Move pick_move_for_skill(const MoveList& list, const int* scores, Move best_move) const;
   int corrected(const Position& pos, int raw) const;
   void update_correction(const Position& pos, int depth, int diff);
   int quiet_history(const Position& pos, Move m, int ply) const;
