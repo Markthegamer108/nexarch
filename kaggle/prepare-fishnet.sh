@@ -39,3 +39,7 @@ upload_dataset nexarch-fishnet-$MONTH "$D" "Lichess fishnet evaluations $MONTH, 
   || { say "UPLOAD FAILED"; exit 1; }
 touch "data/fishnet/fishnet-$MONTH.done"
 say "ready: markthegamer108/nexarch-fishnet-$MONTH, $N positions"
+if [ "${FISHNET_KEEP:-0}" != 1 ]; then
+  rm -f "$OUT" "$DL" "$OUT.rescaled"
+  say "cleaned local copies of $MONTH"
+fi
