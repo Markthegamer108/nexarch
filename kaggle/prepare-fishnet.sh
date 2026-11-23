@@ -33,10 +33,34 @@ if [ ! -f "$OUT.rescaled" ]; then
 fi
 
 N=$(( $(stat -c %s "$OUT") / 32 ))
+BYTES=$(stat -c %s "$OUT")
+.venv/bin/python tools/write_manifest.py --bin "$OUT" --month "$MONTH" --every "$EVERY" \
+  --source "https://huggingface.co/datasets/Lichess/fishnet-evals/resolve/main/standard_rated_${MONTH/-/_}.parquet" \
+  --out "data/fishnet/fishnet-$MONTH.manifest.json" >> "$LOG" 2>&1 || { say "MANIFEST FAILED"; exit 1; }
+.venv/bin/python tools/audit_data.py data/fishnet --glob "fishnet-$MONTH.bin" >> "$LOG" 2>&1 \
+  || { say "AUDIT FAILED"; exit 1; }
 if [ -n "${HF_REPO:-}" ]; then
   .venv/bin/hf upload "$HF_REPO" "$OUT" "fishnet-$MONTH.bin" --repo-type dataset >> "$LOG" 2>&1 \
     || { say "HF UPLOAD FAILED"; exit 1; }
-  say "ready: https://huggingface.co/datasets/$HF_REPO/fishnet-$MONTH.bin, $N positions"
+  .venv/bin/hf upload "$HF_REPO" "data/fishnet/fishnet-$MONTH.manifest.json" "fishnet-$MONTH.manifest.json" --repo-type dataset >> "$LOG" 2>&1 \
+    || say "manifest upload failed (continuing)"
+  REMOTE=$(.venv/bin/python -c "
+import json, urllib.request
+u = 'https://huggingface.co/api/datasets/$HF_REPO/tree/main?recursive=true'
+d = json.load(urllib.request.urlopen(u, timeout=90))
+print(next((((x.get('lfs') or {}).get('size') or x.get('size') or 0) for x in d if x.get('path') == 'fishnet-$MONTH.bin'), 0))
+")
+  if [ "$REMOTE" != "$BYTES" ]; then
+    sleep 45
+    REMOTE=$(.venv/bin/python -c "
+import json, urllib.request
+u = 'https://huggingface.co/api/datasets/$HF_REPO/tree/main?recursive=true'
+d = json.load(urllib.request.urlopen(u, timeout=90))
+print(next((((x.get('lfs') or {}).get('size') or x.get('size') or 0) for x in d if x.get('path') == 'fishnet-$MONTH.bin'), 0))
+")
+  fi
+  [ "$REMOTE" = "$BYTES" ] || { say "VERIFY FAILED: remote $REMOTE != local $BYTES"; exit 1; }
+  say "verified: https://huggingface.co/datasets/$HF_REPO/fishnet-$MONTH.bin, $N positions, $BYTES bytes"
 else
   D=$HOME/.cache/nexarch-kds/nexarch-fishnet-$MONTH
   mkdir -p "$D"

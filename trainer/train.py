@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 import argparse
+import json
 import concurrent.futures
 import glob
 import math
+import os
 import struct
 import time
 
@@ -203,10 +205,24 @@ def main_stream(args, dev):
           f"blocks of {block:,}, chunks of about {per_chunk * block:,}", flush=True)
 
     model = NNUE(args.hidden).to(dev)
-    if args.resume:
-        model.load_state_dict(torch.load(args.resume, map_location=dev))
-        print(f"resumed from {args.resume}", flush=True)
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.0)
+    done = 0
+    if args.resume:
+        state = torch.load(args.resume, map_location=dev)
+        model.load_state_dict(state)
+        side = os.path.splitext(args.resume)[0] + ".train.pt"
+        if os.path.exists(side):
+            extra = torch.load(side, map_location=dev, weights_only=False)
+            if "opt" in extra and len(extra["opt"]["state"]):
+                opt.load_state_dict(extra["opt"])
+            if "progress" in extra:
+                done = int(extra["progress"].get("step", 0))
+                if "rng" in extra:
+                    np.random.set_state(extra["rng"]["numpy"])
+                    torch.set_rng_state(extra["rng"]["torch"].cpu())
+            print(f"resumed from {args.resume} at step {done:,} with optimizer state", flush=True)
+        else:
+            print(f"resumed from {args.resume} (weights only, no optimizer state)", flush=True)
 
     def loss_on(u, t, y):
         return (torch.sigmoid(model(u.long(), t.long())) - y).square().mean()
@@ -248,7 +264,25 @@ def main_stream(args, dev):
         opt, lambda s: min(1.0, (s + 1) / warmup) * (0.02 + 0.98 * 0.5 * (1 + math.cos(math.pi * min(s, total_steps) / total_steps))))
     print(f"training {n_train:,} positions, {args.epochs} epochs x {steps_per_epoch} steps, hidden {args.hidden}", flush=True)
     start = time.time()
-    done = 0
+
+    def save_atomic(path, obj):
+        tmp = path + ".tmp"
+        torch.save(obj, tmp)
+        os.replace(tmp, path)
+
+    def checkpoint(step, epoch, loss_value):
+        base = args.out.rsplit(".", 1)[0]
+        save_atomic(base + ".pt", model.state_dict())
+        save_atomic(base + ".train.pt", {
+            "opt": opt.state_dict(),
+            "progress": {"epoch": int(epoch), "step": int(step), "train_loss": float(loss_value),
+                         "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())},
+            "rng": {"numpy": np.random.get_state(), "torch": torch.get_rng_state()},
+        })
+        json.dump({"epoch": int(epoch), "step": int(step), "train_loss": float(loss_value),
+                   "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())},
+                  open(base + ".state.json", "w"))
+
     for epoch in range(1, args.epochs + 1):
         model.train()
         chunks = chunks_of(epoch_order(epoch))
@@ -277,6 +311,9 @@ def main_stream(args, dev):
                 running += loss.item()
                 steps += 1
                 done += 1
+                if args.save_steps and done % args.save_steps == 0:
+                    checkpoint(done, epoch, running / max(1, steps))
+                    print(f"checkpoint step {done:,} at {time.time() - start:.0f}s", flush=True)
             del tr, perm
             if stop:
                 break
@@ -287,7 +324,7 @@ def main_stream(args, dev):
         print(f"epoch {epoch:3d}  train {running / max(1, steps):.5f}  val {val:.5f}  lr {sched.get_last_lr()[0]:.2e}  "
               f"{time.time() - start:.0f}s", flush=True)
         export(model, args.out)
-        torch.save(model.state_dict(), args.out.rsplit(".", 1)[0] + ".pt")
+        checkpoint(done, epoch, running / max(1, steps))
         if stop:
             print(f"time budget reached after {done:,} steps", flush=True)
             break
@@ -315,6 +352,8 @@ def main():
     p.add_argument("--device", default="auto")
     p.add_argument("--time-budget", type=float, default=0,
                    help="minutes: train fewer epochs if --epochs would not fit (timed on the first steps)")
+    p.add_argument("--save-steps", type=int, default=4000,
+                   help="write a checkpoint every N steps so a killed job loses at most that much")
     p.add_argument("--stream", type=int, default=0, metavar="N",
                    help="train from disk in shuffled chunks of about N positions (for data that does not fit in memory)")
     args = p.parse_args()
