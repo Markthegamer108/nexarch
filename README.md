@@ -53,9 +53,10 @@ so it gets tested properly, instead of me just saying it's strong.
 
 ## Plan
 
-Gen 5 is the current experiment: one h2048 candidate trained on 2.04B positions. h4096 only starts after
-the GPU quota can cover a complete run with its checkpoints, and never while the h2048 candidate is still
-running.
+Gen 5 is the current experiment: one h2048 candidate trained on 2.04B positions. More Stockfish binpacks
+are converted into the same format and extend the same generation after the first run. h4096 only starts
+after the GPU quota can cover a complete run with its checkpoints, and never while the h2048 candidate is
+still running.
 
 Training finishing is not the same as Gen 5 being done. A candidate is called Gen 5 only after it clears
 all of these:

@@ -73,7 +73,10 @@ notebooks and explain the GPU option separately.
 - Search changes are tested with SPRT, not single games: SEE pruning, singular
   extensions, continuation history, better LMR and time management.
 - Data pipeline: download one Stockfish binpack at a time, convert it with
-  `tools/binpack/binpack2nexarch`, audit the output, upload it, and delete the local copy.
-  The laptop has limited disk space, so the pipeline never keeps two large binpacks at once.
+  `kaggle/convert-binpack.sh`, audit the output, upload it to
+  `mark43233/nexarch-binpacks`, and delete the local copy. The laptop has limited disk
+  space, so the pipeline never keeps two large binpacks at once. If the converted file
+  would not fit, the conversion stops at the disk budget and the manifest marks the
+  result as `capped`; that file is a prefix of the source, not a random sample.
 - Every promoted network gets a manifest with the data files, their hashes, the trainer
   command and the match protocol.
