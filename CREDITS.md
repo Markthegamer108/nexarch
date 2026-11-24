@@ -64,6 +64,12 @@ programs, and none of their code is part of Nexarch. What each one judges, and i
   [huggingface.co/datasets/Lichess/fishnet-evals](https://huggingface.co/datasets/Lichess/fishnet-evals).
   Nexarch streams monthly slices of it instead of holding the whole thing.
 
+## Testing
+
+- The [UHO 8-move opening book](https://github.com/official-stockfish/books) (`8mvs_+90_+99.epd`)
+  from the Stockfish project's book collection, released under CC0. The panel benchmark starts every
+  engine from these balanced positions so the result does not depend on one opening.
+
 ## Tools and libraries
 
 - Tomasz Sobczyk's binpack library (MIT), from
