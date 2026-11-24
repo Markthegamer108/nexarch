@@ -37,7 +37,7 @@ D=$HOME/.cache/nexarch-kds/nexarch-evalset-$MONTH
 mkdir -p "$D"
 ln -f "data/eval/frozen-$MONTH.bin" "$D/eval-$MONTH.bin" 2>/dev/null || cp "data/eval/frozen-$MONTH.bin" "$D/eval-$MONTH.bin"
 cp -f "data/eval/frozen-$MONTH.bin.json" "$D/" 2>/dev/null || true
-printf '{"title":"nexarch-evalset-%s","id":"markthegamer108/nexarch-evalset-%s","licenses":[{"name":"CC0-1.0"}]}\n' "$MONTH" "$MONTH" > "$D/dataset-metadata.json"
+printf '{"title":"nexarch-evalset-%s","id":"markthegamer108/nexarch-evalset-%s","licenses":[{"name":"MIT"}]}\n' "$MONTH" "$MONTH" > "$D/dataset-metadata.json"
 upload_dataset nexarch-evalset-$MONTH "$D" "Frozen evaluation set from Lichess fishnet $MONTH, never used in training, $POS positions" \
   || { say "upload failed"; exit 1; }
 

@@ -66,7 +66,8 @@ all of these:
 - the 33-engine panel and Lc0 show the same gain, not just one lucky opponent.
 
 If it misses that bar, the next step is more or better training for the same generation, not Gen 6
-self-play. Gen 6 only starts after Gen 5 has been verified and published.
+self-play. Gen 6 only starts after Gen 5 has been verified and published. The release checklist, including
+the CPU and GPU builds, GUI, installer and Kaggle tutorial, is in [ROADMAP.md](ROADMAP.md).
 
 ## Building
 

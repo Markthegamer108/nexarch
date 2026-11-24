@@ -10,7 +10,7 @@ import tarfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 OWNER = "markthegamer108"
-INCLUDE = ["engine/Makefile", "engine/src", "trainer", "tools", "kaggle/job.py", "kaggle/setup-engines.sh", "kaggle/lc0-setup.sh", "kaggle/train-g3.sh", "kaggle/train-g4.sh", "kaggle/train-g5.sh", "kaggle/confirm-g4.sh", "kaggle/audit-g5.py", "kaggle/colab-train.py", "nets"]
+INCLUDE = ["engine/Makefile", "engine/src", "trainer", "tools", "kaggle/job.py", "kaggle/setup-engines.sh", "kaggle/lc0-setup.sh", "kaggle/train-g3.sh", "kaggle/train-g4.sh", "kaggle/train-g5.sh", "kaggle/confirm-g4.sh", "kaggle/confirm-g5.sh", "kaggle/audit-g5.py", "kaggle/colab-train.py", "nets", "openings"]
 SKIP_SUFFIX = {".pt", ".pyc", ".bin"}
 
 TEMPLATE = '''#!/usr/bin/env python3
@@ -66,7 +66,7 @@ def bundle():
                 rel = f.relative_to(ROOT)
                 if f.suffix in SKIP_SUFFIX or "__pycache__" in rel.parts or "lib" in rel.parts[:-1]:
                     continue
-                if f.stat().st_size > 400_000:
+                if f.stat().st_size > 400_000 and f.suffix != ".epd":
                     print(f"job.py: not bundling {rel} ({f.stat().st_size // 1024} KiB)", file=sys.stderr)
                     continue
                 if f.parent.name == "nets" and f.suffix == ".nnue" and not f.name.startswith("nexarch-g"):
