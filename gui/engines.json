@@ -1,0 +1,25 @@
+[
+  {
+    "name": "Nexarch CPU",
+    "command": "../engine/nexarch",
+    "workingDirectory": "..",
+    "protocol": "uci",
+    "options": [
+      {"name": "EvalFile", "value": "nets/nexarch-g4.nnue"},
+      {"name": "Threads", "value": 1},
+      {"name": "Hash", "value": 64}
+    ]
+  },
+  {
+    "name": "Nexarch GPU",
+    "command": "../engine/nexarch-gpu",
+    "workingDirectory": "..",
+    "protocol": "uci",
+    "options": [
+      {"name": "EvalFile", "value": "nets/nexarch-g4.nnue"},
+      {"name": "UseGPU", "value": true},
+      {"name": "Threads", "value": 1},
+      {"name": "Hash", "value": 64}
+    ]
+  }
+]

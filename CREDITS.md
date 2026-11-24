@@ -90,8 +90,17 @@ programs, and none of their code is part of Nexarch. What each one judges, and i
 
 ## Interface
 
-- The Cburnett chess piece SVG set (CC BY-SA 3.0), via Wikimedia Commons, for the web board's pieces
-  (`tools/pieces`).
+- **Cute Chess 1.5.1**, by Ilari Pihlajisto, Arto Jonsson and contributors, at
+  [github.com/cutechess/cutechess](https://github.com/cutechess/cutechess), GPL-3.0-or-later.
+  It is the desktop GUI in the Nexarch release and is redistributed unmodified; the source is
+  included and linked in `gui/cutechess/SOURCE.md`. The Nexarch engine is a separate MIT program.
+- The Cute Chess application icon and toolbar icons, from the same repository, GPL-3.0-or-later.
+- **python-chess**, by Niklas Fiekas, at
+  [github.com/niklasf/python-chess](https://github.com/niklasf/python-chess), GPL-3.0. It powers
+  the Nexarch Arena web companion; that program is GPL-3.0, while the engine remains MIT.
+- The Cburnett chess piece SVG set (CC BY-SA 3.0), via Wikimedia Commons, for the board's pieces
+  (`gui/pieces`).
+- Qt 6, bundled with Cute Chess, LGPL-3.0 / GPL-3.0; see the Qt project for the corresponding source.
 
 ## Ideas
 

@@ -130,5 +130,12 @@ available under the [ODbL v1.0](https://opendatacommons.org/licenses/odbl/1-0/).
 
 MIT, see [LICENSE](LICENSE).
 
-The only exception is `tools/lc0_batch_grade.py`. It loads Lc0's Python module, which is GPL-3.0, so
-that file is GPL-3.0 too.
+Two separate programs are GPL-3.0 because of their third-party dependencies, and they are not part of
+the MIT engine:
+
+- `tools/lc0_batch_grade.py` loads Lc0's Python module, which is GPL-3.0.
+- `gui/nexarch_gui.py` and `gui/assets/cutechess/` are the Nexarch Arena desktop companion; they import
+  python-chess (GPL-3.0) and use Cute Chess assets (GPL-3.0). The Cute Chess client shipped with the
+  release is the unmodified GPL-3.0 Cute Chess 1.5.1, with its source and license included.
+
+[THIRD_PARTY.md](THIRD_PARTY.md) lists every third-party component and its license.

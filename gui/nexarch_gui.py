@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Mark Ivanovskyy
 """Interactive web chess: play vs Nexarch/any engine, or watch engine matches.
 
 Usage:
-  python tools/web_chess.py [--port 8765] [--host 0.0.0.0] [--engines path/to/engines.json]
-Open http://HOST:PORT in a browser. Binding to 0.0.0.0 exposes it on the LAN;
-for the public internet, forward the port on your router or use a tunnel
-(cloudflared/ngrok) - see the printed instructions.
+  python gui/nexarch_gui.py [--port 8765] [--host 127.0.0.1] [--engines gui/engines.json] [--open]
+Open http://HOST:PORT in a browser. The default binds to localhost. Binding to 0.0.0.0
+exposes the board on the LAN; do that only on a network you trust.
 """
 import argparse
 import http.server
 import json
+import mimetypes
 import os
 import pathlib
 import random
@@ -21,14 +23,22 @@ import sys
 import threading
 import time
 import urllib.parse
+import uuid
 import urllib.request
 
 import chess
 import chess.engine
+import chess.pgn
 import chess.svg
 
-DEFAULT_ENGINES = os.path.expanduser("~/.config/cutechess/engines.json")
-PIECE_DIR = pathlib.Path(__file__).resolve().parent / "pieces"
+HERE = pathlib.Path(__file__).resolve().parent
+DEFAULT_ENGINES = str(HERE / "engines.json")
+CUTECHESS_ENGINES = os.path.expanduser("~/.config/cutechess/engines.json")
+PIECE_DIR = HERE / "pieces"
+CONFIG_DIR = pathlib.Path(os.path.expanduser("~/.config/nexarch"))
+DATA_DIR = pathlib.Path(os.path.expanduser("~/.local/share/nexarch"))
+GUI_CONFIG = CONFIG_DIR / "gui.json"
+GAMES_FILE = DATA_DIR / "games.jsonl"
 PIECE_FILES = {"klt45.svg", "qlt45.svg", "rlt45.svg", "blt45.svg", "nlt45.svg", "plt45.svg",
                "kdt45.svg", "qdt45.svg", "rdt45.svg", "bdt45.svg", "ndt45.svg", "pdt45.svg"}
 OPENINGS = [
@@ -43,19 +53,95 @@ def load_engines(path):
             data = json.load(f)
     except Exception:
         return []
+    base = pathlib.Path(path).resolve().parent
     out = []
     for e in data:
         opts = {}
         for o in e.get("options", []):
             opts[o["name"]] = o.get("value")
+        command = str(e.get("command", ""))
+        parts = shlex.split(command)
+        if parts and not os.path.isabs(parts[0]):
+            parts[0] = str(base / parts[0])
+        command = shlex.join(parts) if parts else command
+        wd = str(e.get("workingDirectory", ""))
+        if wd and not os.path.isabs(wd):
+            wd = str(base / wd)
         out.append({
             "name": e.get("name", "Engine"),
-            "command": e.get("command", ""),
-            "workingDirectory": e.get("workingDirectory", ""),
+            "command": command,
+            "workingDirectory": wd,
             "protocol": e.get("protocol", "uci"),
             "options": opts,
         })
     return out
+
+
+def read_settings():
+    out = {"telemetry": False, "endpoint": "", "anonymous_id": "", "threads": 1, "hash": 64, "skill": 20}
+    try:
+        data = json.loads(GUI_CONFIG.read_text())
+        out.update({k: data[k] for k in out if k in data})
+    except Exception:
+        pass
+    if not out["anonymous_id"]:
+        out["anonymous_id"] = uuid.uuid4().hex
+        save_settings(out)
+    return out
+
+
+def save_settings(data):
+    try:
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        tmp = GUI_CONFIG.with_suffix(".tmp")
+        tmp.write_text(json.dumps(data, indent=1) + "\n")
+        os.replace(tmp, GUI_CONFIG)
+    except Exception:
+        pass
+
+
+def pgn_text(st):
+    game = chess.pgn.Game.from_board(st.board)
+    game.headers["Event"] = "Nexarch Chess"
+    game.headers["Site"] = "Nexarch"
+    game.headers["Date"] = time.strftime("%Y.%m.%d")
+    game.headers["White"] = st.white_name or "Human"
+    game.headers["Black"] = st.black_name or "Human"
+    game.headers["Result"] = st.result or "*"
+    return str(game)
+
+
+def upload_game(endpoint, line):
+    try:
+        req = urllib.request.Request(endpoint, data=line.encode(), headers={"Content-Type": "application/json",
+                                                                           "User-Agent": "NexarchGUI"})
+        urllib.request.urlopen(req, timeout=15).read()
+    except Exception:
+        pass
+
+
+def record_game(st):
+    with st.lock:
+        if st.recorded or not st.moves or st.status not in ("finished", "between_games"):
+            return
+        st.recorded = True
+        pgn = pgn_text(st)
+        result = st.result
+        enabled = st.telemetry
+        endpoint = st.endpoint
+        anon = st.anonymous_id
+    if not enabled:
+        return
+    line = json.dumps({"pgn": pgn, "result": result, "engine": "Nexarch", "anonymous_id": anon,
+                       "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}) + "\n"
+    try:
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        with open(GAMES_FILE, "a") as f:
+            f.write(line)
+    except Exception:
+        pass
+    if endpoint:
+        threading.Thread(target=upload_game, args=(endpoint, line), daemon=True).start()
 
 
 class State:
@@ -87,6 +173,15 @@ class State:
         self.run_id = 0
         self.engine_handles = {}
         self.last_error = ""
+        settings = read_settings()
+        self.telemetry = bool(settings["telemetry"])
+        self.endpoint = settings["endpoint"]
+        self.anonymous_id = settings["anonymous_id"]
+        self.engine_settings = {"threads": int(settings.get("threads", 1)),
+                                "hash": int(settings.get("hash", 64)),
+                                "skill": int(settings.get("skill", 20))}
+        self.engine_info = {}
+        self.recorded = False
 
     def snapshot(self):
         with self.lock:
@@ -111,6 +206,10 @@ class State:
                 "thinking": self.thinking,
                 "last_error": self.last_error,
                 "last_uci": self.last_uci,
+                "telemetry": self.telemetry,
+                "endpoint": self.endpoint,
+                "engine_info": dict(self.engine_info),
+                "settings": dict(self.engine_settings),
                 "legal": self.legal_map(),
                 "check": self.board.is_check(),
                 "termination": self.termination(),
@@ -140,6 +239,7 @@ class State:
         return ""
 
     def reset_board(self):
+        self.recorded = False
         self.board = chess.Board()
         self.fen = chess.STARTING_FEN
         self.moves = []
@@ -160,6 +260,12 @@ class State:
         eng = chess.engine.SimpleEngine.popen_uci(parts, timeout=60, cwd=wd)
         try:
             eng.configure(cfg["options"])
+        except Exception:
+            pass
+        try:
+            eng.configure({"Threads": self.engine_settings["threads"],
+                           "Hash": self.engine_settings["hash"],
+                           "Skill Level": self.engine_settings["skill"]})
         except Exception:
             pass
         self.engine_handles[name] = eng
@@ -183,6 +289,42 @@ SESSIONS_LOCK = threading.Lock()
 ENGINES = []
 
 
+RANKINGS = {}
+RANKINGS_LOCK = threading.Lock()
+
+
+def fetch_json(url, headers):
+    req = urllib.request.Request(url, headers=headers)
+    with urllib.request.urlopen(req, timeout=20) as r:
+        return json.load(r)
+
+
+def rankings(site, perf):
+    key = (site, perf)
+    now = time.time()
+    with RANKINGS_LOCK:
+        if key in RANKINGS and now - RANKINGS[key][0] < 600:
+            return RANKINGS[key][1]
+    ua = "NexarchArena/0.1 (https://github.com/Markthegamer108/nexarch)"
+    if site == "lichess":
+        data = fetch_json(f"https://lichess.org/api/player/top/10/{perf}",
+                          {"Accept": "application/json", "User-Agent": ua})
+        rows = []
+        for u in data.get("users", [])[:10]:
+            p = (u.get("perfs") or {}).get(perf) or {}
+            rows.append({"name": u.get("username", ""), "rating": p.get("rating", 0), "title": u.get("title", "")})
+    else:
+        data = fetch_json("https://api.chess.com/pub/leaderboards", {"User-Agent": ua, "Accept": "application/json"})
+        keyname = {"bullet": "live_bullet", "blitz": "live_blitz", "rapid": "live_rapid",
+                   "classical": "live_classical", "daily": "daily"}.get(perf, "live_blitz")
+        rows = [{"name": x.get("username", ""), "rating": x.get("score", 0), "title": x.get("title", "")}
+                for x in (data.get(keyname) or [])[:10]]
+    out = {"site": site, "perf": perf, "rows": rows}
+    with RANKINGS_LOCK:
+        RANKINGS[key] = (now, out)
+    return out
+
+
 def session_state(handler):
     query = urllib.parse.parse_qs(urllib.parse.urlparse(handler.path).query)
     sid = (query.get("s") or [""])[0].strip()
@@ -199,7 +341,17 @@ def session_state(handler):
 
 def run_engine_move(st, eng_name, board, limit):
     eng = st.open_engine(eng_name)
-    return eng.play(board, limit, info=chess.engine.INFO_SCORE)
+    res = eng.play(board, limit, info=chess.engine.INFO_SCORE)
+    info = getattr(res, "info", {}) or {}
+    score = info.get("score")
+    with st.lock:
+        st.engine_info = {
+            "depth": info.get("depth", 0),
+            "nodes": info.get("nodes", 0),
+            "score": str(score) if score is not None else "",
+            "pv": " ".join(str(m) for m in (info.get("pv") or [])[:6]),
+        }
+    return res
 
 
 def run_match(st, my_run):
@@ -297,6 +449,7 @@ def run_match(st, my_run):
                 st.stats["d"] += 1
             st.stats["done"] += 1
             st.status = "between_games"
+        record_game(st)
         time.sleep(1.5)
     with st.lock:
         if st.run_id == my_run:
@@ -353,6 +506,18 @@ body{margin:0;background:#a8a8a8;color:#1a1a1a;font:13px "Segoe UI",Tahoma,Arial
 .dockinfo{margin:0 8px 8px;background:#fff;border:1px solid #bdbdbd;padding:7px 9px;font-size:12px}
 .dockinfo div{display:flex;justify-content:space-between;padding:2px 0}
 .dockinfo b{font-weight:600;color:#555}
+.brand{display:flex;align-items:center;gap:7px}
+.logo{width:18px;height:18px;display:inline-block}
+.tagline{color:#666;font-size:11px;font-weight:400}
+.ico{width:14px;height:14px;vertical-align:-2px;margin-right:4px}
+.dest{background:#fff;border:1px solid #bdbdbd;padding:6px 8px;font-size:12px;color:#333;margin:2px 0 10px}
+.rankTabs{display:flex;gap:6px;margin-bottom:8px}
+.rankTabs .tb{flex:1}
+.rankTabs .tb.on{background:#dcdcdc;border-color:#777;font-weight:600}
+table.ranks{width:100%;border-collapse:collapse;font-size:12px}
+table.ranks th,table.ranks td{text-align:left;border-bottom:1px solid #ddd;padding:4px 6px}
+table.ranks th{color:#555;font-weight:600}
+table.ranks td.num{text-align:right;font-family:Consolas,monospace}
 .win{color:#1f7a3f}
 .loss{color:#a12a2a}
 .statusbar{display:flex;gap:16px;border-top:1px solid #b5b5b5;background:#ececec;padding:4px 9px;font-size:12px;color:#333}
@@ -370,6 +535,10 @@ body{margin:0;background:#a8a8a8;color:#1a1a1a;font:13px "Segoe UI",Tahoma,Arial
 .dialogButtons{display:flex;justify-content:flex-end;gap:8px;padding:10px 14px;border-top:1px solid #c4c4c4;background:#ececec}
 .dialogButtons button{min-width:78px}
 .error{color:#9b1c1c;font-size:12px;margin-top:8px}
+.hint{color:#666;font-size:11px;line-height:1.45;margin:0 0 10px}
+.check{display:flex;align-items:flex-start;gap:7px}
+.check input{width:auto;margin-top:2px}
+.check span{display:inline;margin:0}
 @media(max-width:760px){
   body{padding:0;touch-action:manipulation}
   .app{border:none;min-height:0;max-width:100%}
@@ -400,12 +569,17 @@ body{margin:0;background:#a8a8a8;color:#1a1a1a;font:13px "Segoe UI",Tahoma,Arial
 </style>
 </head><body>
 <div class="app">
-  <div class="titlebar"><span>Nexarch Chess</span><span class="winbtns"><span>&#8211;</span><span>&#9633;</span><span>&#10005;</span></span></div>
-  <div class="menubar"><span>File</span><span>Game</span><span>Tournament</span><span>View</span><span>Tools</span><span>Help</span></div>
+  <div class="titlebar"><span class="brand"><img class="logo" src="/assets/cutechess/cutechess_32x32.png" alt="">Nexarch Arena</span><span class="tagline">online companion &middot; engines and settings</span></div>
   <div class="toolbar">
-    <button class="tb default" id="newGameBtn">New Game</button>
-    <button class="tb" id="restartBtn">Restart</button>
-    <button class="tb" id="stopBtn">Stop</button>
+    <button class="tb default" id="newGameBtn"><img class="ico" src="/assets/cutechess/toolbutton/add_16x16.png" alt="">New Game</button>
+    <button class="tb" id="restartBtn"><img class="ico" src="/assets/cutechess/toolbutton/clone_16x16.png" alt="">Restart</button>
+    <button class="tb" id="stopBtn"><img class="ico" src="/assets/cutechess/toolbutton/remove_16x16.png" alt="">Stop</button>
+    <button class="tb" id="undoBtn"><img class="ico" src="/assets/cutechess/toolbutton/previous_16x16.png" alt="">Undo</button>
+    <span class="sep"></span>
+    <button class="tb" id="settingsBtn"><img class="ico" src="/assets/cutechess/toolbutton/configure_16x16.png" alt="">Settings</button>
+    <button class="tb" id="rankingsBtn">Rankings</button>
+    <button class="tb" id="creditsBtn">Credits</button>
+    <button class="tb" id="pgnBtn">PGN</button>
     <span class="sep"></span>
     <span class="gameinfo" id="gameInfo">No game</span>
   </div>
@@ -426,7 +600,60 @@ body{margin:0;background:#a8a8a8;color:#1a1a1a;font:13px "Segoe UI",Tahoma,Arial
       </div>
     </div>
   </div>
-  <div class="statusbar"><span class="grow" id="statusMessage">Ready</span><span id="enginesLabel">-</span><span class="credit">Pieces: Cburnett, CC BY-SA 3.0</span></div>
+  <div class="statusbar"><span class="grow" id="statusMessage">Ready</span><span id="enginesLabel">-</span><span class="credit">Engine: Nexarch (MIT) &middot; GUI: GPL-3.0 &middot; Pieces: Cburnett CC BY-SA 3.0</span></div>
+</div>
+
+<div class="modal" id="settingsModal">
+  <div class="dialog">
+    <div class="dialogTitle">Settings</div>
+    <div class="dialogBody">
+      <label class="check"><input type="checkbox" id="telemetry"><span>Anonymous game collection</span></label>
+      <p class="hint">Off by default. When enabled, finished games against Nexarch are saved on this computer and sent to the endpoint below. No account name, email address or hardware ID is included.</p>
+      <label><span>Upload endpoint (optional)</span><input id="endpoint" placeholder="https://example.com/nexarch-games"></label>
+      <div class="dest" id="dest">Saved on this computer only</div>
+      <div class="dialogRow">
+        <label><span>Threads</span><input id="threads" type="number" min="1" max="64" value="1"></label>
+        <label><span>Hash (MB)</span><input id="hash" type="number" min="1" max="65536" value="64"></label>
+      </div>
+      <label><span>Skill level (0-20)</span><input id="skill" type="number" min="0" max="20" value="20"></label>
+      <div class="error" id="settingsErr" style="display:none"></div>
+    </div>
+    <div class="dialogButtons">
+      <button class="tb" id="settingsCancel">Cancel</button>
+      <button class="tb default" id="settingsSave">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="creditsModal">
+  <div class="dialog" style="width:620px;max-width:calc(100vw - 24px)">
+    <div class="dialogTitle">Credits</div>
+    <div class="dialogBody"><pre id="creditsText" style="max-height:60vh;overflow:auto;white-space:pre-wrap;font:12px/1.55 Consolas,monospace;margin:0"></pre></div>
+    <div class="dialogButtons"><button class="tb" id="creditsClose">Close</button></div>
+  </div>
+</div>
+
+<div class="modal" id="rankingsModal">
+  <div class="dialog" style="width:560px;max-width:calc(100vw - 24px)">
+    <div class="dialogTitle">Live rankings</div>
+    <div class="dialogBody">
+      <div class="rankTabs">
+        <button class="tb on" id="rankLichess">Lichess</button>
+        <button class="tb" id="rankChesscom">Chess.com</button>
+      </div>
+      <div class="dialogRow" style="grid-template-columns:1fr">
+        <label><span>Time control</span><select id="perfSel">
+          <option value="bullet">Bullet</option>
+          <option value="blitz" selected>Blitz</option>
+          <option value="rapid">Rapid</option>
+          <option value="classical">Classical</option>
+        </select></label>
+      </div>
+      <table class="ranks"><thead><tr><th>#</th><th>Player</th><th>Title</th><th style="text-align:right">Rating</th></tr></thead><tbody id="rankRows"><tr><td colspan="4">Loading...</td></tr></tbody></table>
+      <div class="error" id="rankErr" style="display:none"></div>
+    </div>
+    <div class="dialogButtons"><button class="tb" id="rankClose">Close</button></div>
+  </div>
 </div>
 
 <div class="modal" id="newGameModal">
@@ -609,6 +836,80 @@ function startGame(){
 }
 function restartGame(){fetch(api("/restart"),{method:"POST"}).then(function(){refresh();});}
 function stopGame(){fetch(api("/stop"),{method:"POST"}).then(function(){refresh();});}
+var settingsModal=document.getElementById("settingsModal");
+var creditsModal=document.getElementById("creditsModal");
+function updateDest(){
+  var on=document.getElementById("telemetry").checked;
+  var ep=document.getElementById("endpoint").value.trim();
+  document.getElementById("dest").textContent=!on?"Anonymous game collection is off":(ep?"Games will be sent to: "+ep:"Games will be saved on this computer only (no endpoint set)");
+}
+document.getElementById("telemetry").onchange=updateDest;
+document.getElementById("endpoint").oninput=updateDest;
+document.getElementById("settingsBtn").onclick=function(){
+  fetch(api("/settings")).then(function(r){return r.json();}).then(function(s){
+    document.getElementById("telemetry").checked=!!s.telemetry;
+    document.getElementById("endpoint").value=s.endpoint||"";
+    document.getElementById("threads").value=s.threads||1;
+    document.getElementById("hash").value=s.hash||64;
+    document.getElementById("skill").value=(s.skill===undefined?20:s.skill);
+    updateDest();
+    settingsModal.classList.add("open");
+  }).catch(function(){showError("Network error");});
+};
+document.getElementById("settingsCancel").onclick=function(){settingsModal.classList.remove("open");};
+settingsModal.onclick=function(e){if(e.target===this)settingsModal.classList.remove("open");};
+document.getElementById("settingsSave").onclick=function(){
+  fetch(api("/settings"),{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({telemetry:document.getElementById("telemetry").checked,
+                         endpoint:document.getElementById("endpoint").value,
+                         threads:document.getElementById("threads").value,
+                         hash:document.getElementById("hash").value,
+                         skill:document.getElementById("skill").value})})
+    .then(function(r){return r.json();}).then(function(d){
+      if(d.error){document.getElementById("settingsErr").textContent=d.error;document.getElementById("settingsErr").style.display="block";return;}
+      settingsModal.classList.remove("open");
+    }).catch(function(){showError("Network error");});
+};
+document.getElementById("creditsBtn").onclick=function(){
+  fetch(api("/credits")).then(function(r){return r.text();}).then(function(t){
+    document.getElementById("creditsText").textContent=t;
+    creditsModal.classList.add("open");
+  }).catch(function(){showError("Network error");});
+};
+document.getElementById("creditsClose").onclick=function(){creditsModal.classList.remove("open");};
+creditsModal.onclick=function(e){if(e.target===this)creditsModal.classList.remove("open");};
+document.getElementById("pgnBtn").onclick=function(){window.location=api("/pgn");};
+document.getElementById("undoBtn").onclick=function(){
+  fetch(api("/undo"),{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"})
+    .then(function(r){return r.json();}).then(function(d){
+      if(d.error){showError(d.error);return;}
+      if(d.state)applyState(d.state);
+    }).catch(function(){showError("Network error");});
+};
+var rankSite="lichess";
+var rankingsModal=document.getElementById("rankingsModal");
+function loadRankings(){
+  var perf=document.getElementById("perfSel").value;
+  document.getElementById("rankRows").innerHTML='<tr><td colspan="4">Loading...</td></tr>';
+  document.getElementById("rankErr").style.display="none";
+  fetch(api("/rankings?site="+encodeURIComponent(rankSite)+"&perf="+encodeURIComponent(perf)))
+    .then(function(r){return r.json();}).then(function(d){
+      if(d.error){document.getElementById("rankErr").textContent=d.error;document.getElementById("rankErr").style.display="block";}
+      var rows=(d.rows||[]).map(function(x,i){
+        return "<tr><td>"+(i+1)+"</td><td>"+escapeHtml(x.name||"")+"</td><td>"+escapeHtml(x.title||"")+"</td><td class='num'>"+x.rating+"</td></tr>";
+      }).join("");
+      document.getElementById("rankRows").innerHTML=rows||'<tr><td colspan="4">No rows</td></tr>';
+    }).catch(function(e){document.getElementById("rankErr").textContent="Network error";document.getElementById("rankErr").style.display="block";});
+}
+function escapeHtml(t){return String(t).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
+document.getElementById("rankingsBtn").onclick=function(){
+  rankingsModal.classList.add("open"); loadRankings();
+};
+document.getElementById("rankClose").onclick=function(){rankingsModal.classList.remove("open");};
+rankingsModal.onclick=function(e){if(e.target===this)rankingsModal.classList.remove("open");};
+document.getElementById("rankLichess").onclick=function(){rankSite="lichess";this.classList.add("on");document.getElementById("rankChesscom").classList.remove("on");loadRankings();};
+document.getElementById("rankChesscom").onclick=function(){rankSite="chesscom";this.classList.add("on");document.getElementById("rankLichess").classList.remove("on");loadRankings();};
+document.getElementById("perfSel").onchange=loadRankings;
 document.getElementById("newGameBtn").onclick=openDialog;
 document.getElementById("okBtn").onclick=startGame;
 document.getElementById("cancelBtn").onclick=closeDialog;
@@ -698,6 +999,21 @@ def make_handler():
                 self.send_header("Content-Length", str(len(data)))
                 self.end_headers()
                 self.wfile.write(data)
+            elif path.startswith("/assets/"):
+                rel = path[len("/assets/"):]
+                base = (HERE / "assets").resolve()
+                target = (base / rel).resolve()
+                if str(target).startswith(str(base)) and target.is_file():
+                    data = target.read_bytes()
+                    self.send_response(200)
+                    self.send_header("Content-Type", mimetypes.guess_type(target.name)[0] or "application/octet-stream")
+                    self.send_header("Content-Length", str(len(data)))
+                    self.send_header("Cache-Control", "max-age=86400")
+                    self.end_headers()
+                    self.wfile.write(data)
+                else:
+                    self.send_response(404)
+                    self.end_headers()
             elif path.startswith("/pieces/"):
                 name = path.rsplit("/", 1)[-1]
                 if name in PIECE_FILES:
@@ -711,10 +1027,55 @@ def make_handler():
                     self.send_response(404)
                     self.end_headers()
             elif path.startswith("/state.json"):
+                record_game(st)
                 data = json.dumps(st.snapshot()).encode()
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(data)
+            elif path == "/rankings":
+                query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+                site = (query.get("site") or ["lichess"])[0]
+                perf = (query.get("perf") or ["blitz"])[0]
+                try:
+                    data = json.dumps(rankings(site, perf)).encode()
+                except Exception as exc:
+                    data = json.dumps({"error": str(exc), "site": site, "perf": perf, "rows": []}).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(data)
+            elif path == "/settings":
+                data = json.dumps({"telemetry": st.telemetry, "endpoint": st.endpoint,
+                                   "threads": st.engine_settings["threads"], "hash": st.engine_settings["hash"],
+                                   "skill": st.engine_settings["skill"]}).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(data)
+            elif path == "/credits":
+                text = ""
+                for candidate in (HERE.parent / "CREDITS.md", HERE / "CREDITS.md"):
+                    if candidate.exists():
+                        text = candidate.read_text()
+                        break
+                data = (text or "Nexarch is MIT licensed. See CREDITS.md for the full list.").encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain; charset=utf-8")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+            elif path == "/pgn":
+                data = pgn_text(st).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/x-chess-pgn; charset=utf-8")
+                self.send_header("Content-Disposition", 'attachment; filename="nexarch-game.pgn"')
+                self.send_header("Content-Length", str(len(data)))
                 self.end_headers()
                 self.wfile.write(data)
             elif path.startswith("/board.svg"):
@@ -743,7 +1104,54 @@ def make_handler():
                 body = json.loads(raw or b"{}")
             except Exception:
                 body = {}
-            if path == "/move":
+            if path == "/settings":
+                with st.lock:
+                    st.telemetry = bool(body.get("telemetry"))
+                    st.endpoint = str(body.get("endpoint", "")).strip()
+                    st.anonymous_id = st.anonymous_id or uuid.uuid4().hex
+                    for key in ("threads", "hash", "skill"):
+                        if key in body:
+                            st.engine_settings[key] = max(1, int(body[key]))
+                    settings = {"telemetry": st.telemetry, "endpoint": st.endpoint,
+                                "anonymous_id": st.anonymous_id, **st.engine_settings}
+                save_settings(settings)
+                st.close_engines()
+                with SESSIONS_LOCK:
+                    for other in SESSIONS.values():
+                        other.telemetry = st.telemetry
+                        other.endpoint = st.endpoint
+                STATE.telemetry = st.telemetry
+                STATE.endpoint = st.endpoint
+                self._json({"ok": True, "telemetry": st.telemetry, "endpoint": st.endpoint,
+                            **st.engine_settings})
+            elif path == "/undo":
+                with st.lock:
+                    st.run_id += 1
+                    st.stop.set()
+                    st.thinking = False
+                    n = 1 if (st.white_human and st.black_human) else 2
+                    n = min(n, len(st.board.move_stack))
+                    if n == 0:
+                        self._json({"error": "nothing to undo", "state": st.snapshot()}, 400)
+                        return
+                    for _ in range(n):
+                        st.board.pop()
+                    st.fen = st.board.fen()
+                    st.last_uci = st.board.move_stack[-1].uci() if st.board.move_stack else ""
+                    st.moves = []
+                    tmp = chess.Board()
+                    for mv in st.board.move_stack:
+                        st.moves.append(tmp.san(mv))
+                        tmp.push(mv)
+                    st.status = "playing"
+                    st.result = ""
+                    st.end_reason = ""
+                    st.recorded = False
+                    st.engine_info = {}
+                    snap = st.snapshot()
+                st.stop.clear()
+                self._json({"ok": True, "state": snap})
+            elif path == "/move":
                 uci = (body.get("uci") or "").strip()
                 with st.lock:
                     try:
@@ -881,9 +1289,10 @@ def public_ip():
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--host", default="0.0.0.0")
+    ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8765)
-    ap.add_argument("--engines", default=DEFAULT_ENGINES)
+    ap.add_argument("--engines", default=DEFAULT_ENGINES if os.path.exists(DEFAULT_ENGINES) else CUTECHESS_ENGINES)
+    ap.add_argument("--open", action="store_true", help="open the board in the default browser")
     args = ap.parse_args()
 
     STATE.engines = load_engines(args.engines)
@@ -894,23 +1303,11 @@ def main():
     Handler = make_handler()
     httpd = http.server.ThreadingHTTPServer((args.host, args.port), Handler)
     httpd.allow_reuse_address = True
-    print(f"Web Chess listening on http://{args.host}:{args.port}/")
-    # LAN IP
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
-        lan = s.getsockname()[0]
-        s.close()
-        print(f"LAN access:  http://{lan}:{args.port}/")
-    except Exception:
-        pass
-    pip = public_ip()
-    if pip:
-        print(f"Public IP:   {pip}  (needs port forwarding on your router for port {args.port})")
+    print(f"Nexarch Chess listening on http://{args.host}:{args.port}/")
     print("Engines:", ", ".join(e["name"] for e in STATE.engines) or "(none)")
-    print("For internet access without port forwarding, run one of:")
-    print("  cloudflared tunnel --url http://localhost:%d" % args.port)
-    print("  ngrok http %d" % args.port)
+    if args.open:
+        import webbrowser
+        threading.Timer(0.5, lambda: webbrowser.open(f"http://127.0.0.1:{args.port}/")).start()
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

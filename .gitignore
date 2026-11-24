@@ -24,3 +24,8 @@ NOTES.md
 
 tools/binpack/lib/
 tools/binpack/binpack2nexarch
+
+# release binaries
+engine/nexarch-cpu
+engine/nexarch-cpu-avx2
+engine/nexarch-gpu
