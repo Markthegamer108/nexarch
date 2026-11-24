@@ -38,5 +38,13 @@ void update(const Network& net, Accumulator& dst, const Accumulator& src, const 
 void copy(const Network& net, Accumulator& dst, const Accumulator& src);
 int evaluate(const Network& net, const Accumulator& acc, int stm);
 int evaluate_scalar(const Network& net, const Accumulator& acc, int stm);
+constexpr int GPU_FAIL = -2147483647 - 1;
+bool gpu_init(const Network& net, int device_index, std::string& error);
+void gpu_shutdown();
+bool gpu_ready();
+std::string gpu_info();
+void set_gpu(bool on);
+bool gpu_enabled();
+int evaluate_gpu(const Network& net, const Accumulator& acc, int stm);
 
 }

@@ -122,7 +122,7 @@ int evaluate_scalar(const Network& net, const Accumulator& acc, int stm) {
 }
 
 #if defined(__AVX2__)
-int evaluate(const Network& net, const Accumulator& acc, int stm) {
+int evaluate_cpu(const Network& net, const Accumulator& acc, int stm) {
   if (!net.simd_safe) return evaluate_scalar(net, acc, stm);
   const int h = net.hidden;
   const __m256i zero = _mm256_setzero_si256();
@@ -148,7 +148,15 @@ int evaluate(const Network& net, const Accumulator& acc, int stm) {
   return finish(net, total);
 }
 #else
-int evaluate(const Network& net, const Accumulator& acc, int stm) { return evaluate_scalar(net, acc, stm); }
+int evaluate_cpu(const Network& net, const Accumulator& acc, int stm) { return evaluate_scalar(net, acc, stm); }
 #endif
+
+int evaluate(const Network& net, const Accumulator& acc, int stm) {
+  if (gpu_enabled()) {
+    const int v = evaluate_gpu(net, acc, stm);
+    if (v != GPU_FAIL) return v;
+  }
+  return evaluate_cpu(net, acc, stm);
+}
 
 }

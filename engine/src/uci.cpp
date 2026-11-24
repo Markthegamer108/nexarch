@@ -30,6 +30,7 @@ struct Engine {
   bool uci_limit_strength = false;
   int uci_elo = 1500;
   int skill_level = 20;
+  int gpu_device = 0;
 
   Engine() {
     tt.resize(64);
@@ -324,6 +325,15 @@ void cmd_setoption(Engine& e, std::istringstream& in) {
       std::string error;
       e.use_net = e.net.load(value, error);
       std::printf("info string %s\n", e.use_net ? ("loaded network " + value).c_str() : error.c_str());
+      if (e.use_net && nnue::gpu_enabled()) {
+        std::string gpu_error;
+        if (nnue::gpu_init(e.net, e.gpu_device, gpu_error))
+          std::printf("info string GPU: %s\n", nnue::gpu_info().c_str());
+        else {
+          nnue::set_gpu(false);
+          std::printf("info string GPU unavailable: %s\n", gpu_error.c_str());
+        }
+      }
     }
   } else if (name == "UCI_LimitStrength") {
     e.uci_limit_strength = (value == "true" || value == "1");
@@ -334,6 +344,39 @@ void cmd_setoption(Engine& e, std::istringstream& in) {
   } else if (name == "Skill Level") {
     e.skill_level = std::clamp(std::stoi(value), 0, 20);
     std::printf("info string Skill Level set to %d\n", e.skill_level);
+#if defined(NEXARCH_OPENCL)
+  } else if (name == "UseGPU") {
+    const bool on = value == "true" || value == "1";
+    nnue::set_gpu(on);
+    if (on) {
+      if (!e.use_net) {
+        nnue::set_gpu(false);
+        std::printf("info string GPU: load a network first\n");
+      } else {
+        std::string error;
+        if (nnue::gpu_init(e.net, e.gpu_device, error)) {
+          std::printf("info string GPU: %s\n", nnue::gpu_info().c_str());
+        } else {
+          nnue::set_gpu(false);
+          std::printf("info string GPU unavailable: %s\n", error.c_str());
+        }
+      }
+    } else {
+      nnue::gpu_shutdown();
+      std::printf("info string GPU disabled: using the CPU\n");
+    }
+  } else if (name == "GPUDevice") {
+    e.gpu_device = std::clamp(std::stoi(value), 0, 15);
+    if (e.use_net && nnue::gpu_enabled()) {
+      std::string error;
+      if (nnue::gpu_init(e.net, e.gpu_device, error))
+        std::printf("info string GPU: %s\n", nnue::gpu_info().c_str());
+      else {
+        nnue::set_gpu(false);
+        std::printf("info string GPU unavailable: %s\n", error.c_str());
+      }
+    }
+#endif
   }
   std::fflush(stdout);
 }
@@ -354,6 +397,10 @@ bool handle(Engine& e, const std::string& line) {
     std::printf("option name UCI_LimitStrength type check default false\n");
     std::printf("option name UCI_Elo type spin default 1500 min 1320 max 3190\n");
     std::printf("option name Skill Level type spin default 20 min 0 max 20\n");
+#if defined(NEXARCH_OPENCL)
+    std::printf("option name UseGPU type check default false\n");
+    std::printf("option name GPUDevice type spin default 0 min 0 max 15\n");
+#endif
     std::printf("uciok\n");
   } else if (cmd == "isready") {
     std::printf("readyok\n");
@@ -403,6 +450,10 @@ bool handle(Engine& e, const std::string& line) {
   } else if (cmd == "packfens") {
     e.halt();
     run_packfens(rest);
+  } else if (cmd == "backend") {
+    std::printf("info string backend %s\n", nnue::gpu_enabled() && nnue::gpu_ready()
+                    ? ("gpu " + nnue::gpu_info()).c_str() : "cpu");
+    std::fflush(stdout);
   } else if (!cmd.empty()) {
     std::printf("info string unknown command %s\n", cmd.c_str());
   }
@@ -422,11 +473,13 @@ int main(int argc, char** argv) {
     if (line.rfind("perftsuite", 0) == 0) return cmd_perftsuite(line.find("deep") != std::string::npos) ? 0 : 1;
     handle(engine, line);
     engine.halt();
+    nnue::gpu_shutdown();
     return 0;
   }
   std::string line;
   while (std::getline(std::cin, line))
-    if (!handle(engine, line)) return engine.halt(), 0;
+    if (!handle(engine, line)) return engine.halt(), nnue::gpu_shutdown(), 0;
   engine.wait();
+  nnue::gpu_shutdown();
   return 0;
 }
