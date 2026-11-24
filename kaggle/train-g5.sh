@@ -9,7 +9,8 @@ EPOCHS=${G5_EPOCHS:-8}
 ONLY=${G5_ONLY:-g5-a}
 PY=${PYTHON:-python}
 DATA=("$IN/**/graded-g3-full.bin" "$IN/**/t80-*.bin" "$IN/**/lichess-*.bin" "$IN/**/fishnet-*.bin" "$IN/**/selfplay-*.bin")
-S2048=$(find "$IN" -name nexarch-g5-h2048-start.pt -print -quit)
+[ -n "${G5_EXTRA_DATA:-}" ] && DATA+=("$G5_EXTRA_DATA")
+S2048=${G5_RESUME:-$(find "$IN" -name nexarch-g5-h2048-start.pt -print -quit)}
 S4096=$(find "$IN" -name nexarch-g5-h4096-start.pt -print -quit)
 [ -n "$S2048" ] && [ -n "$S4096" ] || { echo "start checkpoints nexarch-g5-h2048-start.pt / nexarch-g5-h4096-start.pt not found in $IN"; exit 1; }
 mkdir -p "$OUT"
@@ -31,15 +32,15 @@ train() {
 }
 
 if [ "${G5_SEQ:-0}" = 1 ]; then
-  [ "$ONLY" = g5-b ] || train g5-a 0 2048 "$S2048" 0.0006 8192
-  [ "$ONLY" = g5-a ] || train g5-b 0 4096 "$S4096" 0.0004 4096
+  [ "$ONLY" = g5-b ] || train g5-a 0 2048 "$S2048" "${G5_A_LR:-0.0006}" 8192
+  [ "$ONLY" = g5-a ] || train g5-b 0 4096 "$S4096" "${G5_B_LR:-0.0004}" 4096
 elif [ "$ONLY" = g5-b ]; then
-  train g5-b 0 4096 "$S4096" 0.0004 4096
+  train g5-b 0 4096 "$S4096" "${G5_B_LR:-0.0004}" 4096
 elif [ "$ONLY" = g5-a ]; then
-  train g5-a 0 2048 "$S2048" 0.0006 8192
+  train g5-a 0 2048 "$S2048" "${G5_A_LR:-0.0006}" 8192
 else
-  ( train g5-a 0 2048 "$S2048" 0.0006 8192 ) &
-  ( train g5-b 1 4096 "$S4096" 0.0004 4096 ) &
+  ( train g5-a 0 2048 "$S2048" "${G5_A_LR:-0.0006}" 8192 ) &
+  ( train g5-b 1 4096 "$S4096" "${G5_B_LR:-0.0004}" 4096 ) &
   wait
 fi
 [ -f "$OUT/g5-a.nnue" ] || [ -f "$OUT/g5-b.nnue" ] || { echo "no candidate survived training"; exit 1; }
