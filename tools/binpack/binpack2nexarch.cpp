@@ -48,12 +48,13 @@ void pack(const binpack::TrainingDataEntry& e, unsigned char out[32]) {
 
 int main(int argc, char** argv) {
   if (argc < 3) {
-    std::fprintf(stderr, "usage: binpack2nexarch IN.binpack OUT.bin [every=N] [offset=K] [max=M] [fens=FILE]\n");
+    std::fprintf(stderr, "usage: binpack2nexarch IN.binpack OUT.bin [every=N] [offset=K] [max=M] [filter=0|1] [fens=FILE]\n");
     return 2;
   }
   const std::uint64_t every = std::max<std::uint64_t>(1, std::stoull(arg(argc, argv, "every", "1")));
   const std::uint64_t offset = std::stoull(arg(argc, argv, "offset", "0")) % every;
   const std::uint64_t max = std::stoull(arg(argc, argv, "max", "0"));
+  const bool filter = arg(argc, argv, "filter", "1") != "0";
   const std::string fens_path = arg(argc, argv, "fens", "");
 
   std::FILE* out = std::fopen(argv[2], "wb");
@@ -72,8 +73,8 @@ int main(int argc, char** argv) {
     if (seen++ % every != offset) continue;
     sampled++;
     if (e.score == VALUE_NONE) { none++; continue; }
-    if (e.isInCheck()) { check++; continue; }
-    if (e.isCapturingMove() || e.move.type == chess::MoveType::Promotion || e.move.type == chess::MoveType::EnPassant) {
+    if (filter && e.isInCheck()) { check++; continue; }
+    if (filter && (e.isCapturingMove() || e.move.type == chess::MoveType::Promotion || e.move.type == chess::MoveType::EnPassant)) {
       noisy++;
       continue;
     }
