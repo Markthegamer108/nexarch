@@ -6,6 +6,7 @@ cd "$(dirname "$0")/.."
 IN=${G5_INPUT:-/kaggle/input}
 BUDGET=${G5_BUDGET:-600}
 EPOCHS=${G5_EPOCHS:-8}
+ONLY=${G5_ONLY:-g5-a}
 PY=${PYTHON:-python}
 DATA=("$IN/**/graded-g3-full.bin" "$IN/**/t80-*.bin" "$IN/**/lichess-*.bin" "$IN/**/fishnet-*.bin" "$IN/**/selfplay-*.bin")
 S2048=$(find "$IN" -name nexarch-g5-h2048-start.pt -print -quit)
@@ -30,11 +31,11 @@ train() {
 }
 
 if [ "${G5_SEQ:-0}" = 1 ]; then
-  [ "${G5_ONLY:-both}" = g5-b ] || train g5-a 0 2048 "$S2048" 0.0006 8192
-  [ "${G5_ONLY:-both}" = g5-a ] || train g5-b 0 4096 "$S4096" 0.0004 4096
-elif [ "${G5_ONLY:-both}" = g5-b ]; then
+  [ "$ONLY" = g5-b ] || train g5-a 0 2048 "$S2048" 0.0006 8192
+  [ "$ONLY" = g5-a ] || train g5-b 0 4096 "$S4096" 0.0004 4096
+elif [ "$ONLY" = g5-b ]; then
   train g5-b 0 4096 "$S4096" 0.0004 4096
-elif [ "${G5_ONLY:-both}" = g5-a ]; then
+elif [ "$ONLY" = g5-a ]; then
   train g5-a 0 2048 "$S2048" 0.0006 8192
 else
   ( train g5-a 0 2048 "$S2048" 0.0006 8192 ) &

@@ -4,6 +4,10 @@ cd "$(dirname "$0")/.."
 LOG=kaggle-out/pipeline.log
 say() { echo "$(date '+%F %T') $*" >> "$LOG"; }
 say "pipeline start"
+if [ -f kaggle-out/.primary-g5 ]; then
+  say "primary h2048 experiment active: fishnet backlog stays paused"
+  exit 0
+fi
 
 pick_next_month() {
   local last next

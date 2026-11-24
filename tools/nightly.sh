@@ -10,7 +10,9 @@ if [ "$FREE" -lt 40 ]; then
   say "low disk: clearing caches"
   rm -rf ~/.cache/nexarch-eval/*.parquet ~/.cache/nexarch-binpack/sf/*.binpack 2>/dev/null
 fi
-if pgrep -f 'fishnet-backlog.sh' >/dev/null; then
+if [ -f kaggle-out/.primary-g5 ]; then
+  say "primary h2048 experiment active: not starting the backlog"
+elif pgrep -f 'fishnet-backlog.sh' >/dev/null; then
   say "backlog already running"
 else
   LAST=$(ls -1 data/fishnet/*.done 2>/dev/null | sed 's/.*fishnet-//;s/\.done//' | grep -E '^[0-9]{4}-[0-9]{2}$' | sort | tail -1)
