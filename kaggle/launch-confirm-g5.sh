@@ -9,7 +9,7 @@ while :; do
   D=kaggle-out/nexarch-train-g5-a
   if [ -f "$D/collected/remote-status" ]; then
     S=$(cat "$D/collected/remote-status")
-    [ "$S" = COMPLETE ] && break
+    { [ "$S" = COMPLETE ] || [ "$S" = COMPLETE_PARTIAL ]; } && break
     say "h2048 job ended as $S: not confirming"
     exit 1
   fi
@@ -21,8 +21,8 @@ while :; do
   sleep 120
 done
 D=kaggle-out/nexarch-train-g5-a
-NET=$(find "$D" -name 'g5-a.nnue' -o -name 'g5-b.nnue' -o -name 'nexarch-g5.nnue' 2>/dev/null | head -1)
-[ -n "$NET" ] || { say "no Gen 5 network in $D: not confirming"; exit 1; }
+NET=$(find "$D" \( -name 'g5-a.nnue' -o -name 'g5-b.nnue' -o -name 'nexarch-g5.nnue' -o -name 'g5-a.pt' -o -name 'g5-b.pt' \) 2>/dev/null | head -1)
+[ -n "$NET" ] || { say "no Gen 5 network or checkpoint in $D: not confirming"; exit 1; }
 say "candidate found: $NET"
 ST=$(kernel_state nexarch-confirm-g5)
 if [ -n "$ST" ]; then

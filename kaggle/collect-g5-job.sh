@@ -32,7 +32,13 @@ case "$STATE" in
     timeout 360 "$KAGGLE" kernels output "$REF" -p "$STAGE" -o -q >> "$OUT/collect.log" 2>&1
     if [[ $STATE = COMPLETE ]]; then
       test -s "$STAGE/run.log"
-      grep -q ' job finished$' "$STAGE/run.log"
+      if ! grep -q ' job finished$' "$STAGE/run.log"; then
+        if find "$STAGE" -maxdepth 2 \( -name 'g5-a.pt' -o -name 'g5-b.pt' -o -name 'nexarch-g5.pt' \) -print -quit | grep -q .; then
+          STATE=COMPLETE_PARTIAL
+        else
+          exit 1
+        fi
+      fi
     fi
     printf '%s\n' "$STATE" > "$STAGE/remote-status"
     mv -T "$STAGE" "$OUT/collected"

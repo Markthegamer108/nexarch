@@ -18,6 +18,11 @@ if [ -z "$FINAL" ]; then
   PICK=()
   for name in g5-a g5-b; do
     N=$(find "$IN" -name "$name.nnue" -print -quit)
+    P=$(find "$IN" -name "$name.pt" -print -quit)
+    if [ -z "$N" ] && [ -n "$P" ]; then
+      "$PY" tools/export_net.py --pt "$P" --nnue "$OUT/$name.nnue" || exit 1
+      N="$OUT/$name.nnue"
+    fi
     [ -n "$N" ] || continue
     echo "$name vs Gen 4, $GAUNTLET games at $MOVETIME ms per move: $(./engine/nexarch match a="$N" b="$G4N" \
       games="$GAUNTLET" movetime="$MOVETIME" threads="$CPUS" seed=777 | tee "$OUT/gauntlet-$name.txt" | tail -1)"
@@ -29,8 +34,17 @@ if [ -z "$FINAL" ]; then
 else
   cp "$FINAL" "$OUT/nexarch-g5.nnue"
   FINAL="$OUT/nexarch-g5.nnue"
+  for name in nexarch-g5.pt g5-a.pt g5-b.pt; do
+    PT=$(find "$IN" -name "$name" -print -quit)
+    [ -n "$PT" ] && cp "$PT" "$OUT/nexarch-g5.pt" && break
+  done
+fi
+if [ ! -s "$FINAL" ]; then
   PT=$(find "$IN" -name nexarch-g5.pt -print -quit)
-  [ -n "$PT" ] && cp "$PT" "$OUT/nexarch-g5.pt"
+  [ -n "$PT" ] || { echo "no Gen 5 network or checkpoint to confirm"; exit 1; }
+  "$PY" tools/export_net.py --pt "$PT" --nnue "$OUT/nexarch-g5.nnue" || exit 1
+  cp "$PT" "$OUT/nexarch-g5.pt"
+  FINAL="$OUT/nexarch-g5.nnue"
 fi
 [ -s "$FINAL" ] || { echo "no Gen 5 network to confirm"; exit 1; }
 
