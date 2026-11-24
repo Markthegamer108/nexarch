@@ -40,7 +40,7 @@ else
     --dataset markthegamer108/nexarch-fishnet-2025-01 \
     --dataset markthegamer108/nexarch-selfplay-2026-11-22 \
     --dataset markthegamer108/nexarch-g5-starts \
-    --cmd 'R=$(find /kaggle/input -name g5-a.pt -print -quit); test -n "$R" || exit 1; P=/kaggle/working/fishpack32-part0.bin; for i in 1 2 3; do curl -sSfL -r 0- https://huggingface.co/datasets/mark43233/nexarch-binpacks/resolve/main/binpacks/fishpack32.bin | head -c 15000000000 > "$P"; [ "$(stat -c %s "$P" 2>/dev/null || echo 0)" = 15000000000 ] && break; rm -f "$P"; sleep 30; done; test "$(stat -c %s "$P")" = 15000000000; G5_BUDGET='"$BUDGET"' G5_EPOCHS=8 G5_ONLY=g5-a G5_RESUME="$R" G5_A_LR=0.0003 G5_EXTRA_DATA="$P" bash kaggle/train-g5.sh {out} {cpus}' \
+    --cmd 'R=$(find /kaggle/input -name g5-a.pt -print -quit); test -n "$R" || exit 1; P=/kaggle/working/fishpack32-part0.bin; EXPECTED_SHA="7603dd47c059346c5516c339648e688adfcf0e1c390b915d91da0909152ca5b7"; for i in 1 2 3; do curl -sSfL -r 0- https://huggingface.co/datasets/mark43233/nexarch-binpacks/resolve/main/binpacks/fishpack32.bin | head -c 15000000000 > "$P"; ACTUAL=$(sha256sum "$P" | cut -d" " -f1); [ "$ACTUAL" = "$EXPECTED_SHA" ] && break; echo "SHA mismatch: got $ACTUAL, expected $EXPECTED_SHA"; rm -f "$P"; sleep 30; done; [ "$(stat -c %s "$P" 2>/dev/null || echo 0)" = 15000000000 ] && break; rm -f "$P"; sleep 30; done; test "$(stat -c %s "$P")" = 15000000000; G5_BUDGET='"$BUDGET"' G5_EPOCHS=8 G5_ONLY=g5-a G5_RESUME="$R" G5_A_LR=0.0003 G5_EXTRA_DATA="$P" bash kaggle/train-g5.sh {out} {cpus}' \
     --push || { say "could not launch $NAME"; exit 1; }
 fi
 bash kaggle/ensure-kernel.sh "$NAME"
