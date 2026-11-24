@@ -41,6 +41,7 @@ if [ $((BYTES % 32)) -ne 0 ]; then
   BYTES=$((N * 32))
 fi
 say "converted $N positions -> $OUT"
+[ "$N" -lt "$MAXP" ] || say "note: conversion reached the disk budget, so this file is a prefix"
 .venv/bin/python - <<PY >> "$LOG" 2>&1
 import hashlib, json, sys
 from datetime import datetime, timezone
@@ -69,9 +70,14 @@ manifest = {
     'bytes': p.stat().st_size,
     'sha256': h.hexdigest(),
     'filter': int('$FILTER'),
+    'max': int('$MAXP'),
+    'capped': (p.stat().st_size // 32) >= int('$MAXP'),
     'converter': 'tools/binpack/binpack2nexarch.cpp',
     'created': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
 }
+if manifest['capped']:
+    manifest['note'] = 'prefix of the source binpack: the conversion stopped at the local disk budget'
+
 Path('$MAN').write_text(json.dumps(manifest, indent=2) + '\n')
 print(json.dumps(manifest))
 PY
