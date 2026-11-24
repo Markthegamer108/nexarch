@@ -15,7 +15,7 @@ case "$2" in
     [[ "$MOCK_DOWNLOAD" != fail ]] || exit 7
     [[ "$4" = -p ]]
     printf '12:00:00 %s\n' "$MOCK_DOWNLOAD" > "$5/run.log"
-    [[ "${MOCK_PARTIAL:-0}" != 1 ]] || : > "$5/g5-a.pt"
+    [[ "${MOCK_PARTIAL:-0}" != 1 ]] || printf 'checkpoint\n' > "$5/g5-a.pt"
     ;;
 esac
 EOF
