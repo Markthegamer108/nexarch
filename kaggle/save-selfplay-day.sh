@@ -24,7 +24,8 @@ say "merged $N positions into $OUT"
 D=$HOME/.cache/nexarch-kds/nexarch-selfplay-$DATE
 mkdir -p "$D"
 ln -f "$OUT" "$D/selfplay-$DATE.bin" 2>/dev/null || cp "$OUT" "$D/selfplay-$DATE.bin"
-printf '{"title":"nexarch-selfplay-%s","id":"markthegamer108/nexarch-selfplay-%s","licenses":[{"name":"other"}]}\n' "$DATE" "$DATE" > "$D/dataset-metadata.json"
+printf '{"title":"nexarch-selfplay-%s","id":"markthegamer108/nexarch-selfplay-%s","licenses":[{"name":"MIT"}]}\n' "$DATE" "$DATE" > "$D/dataset-metadata.json"
+mit_license "$D"
 upload_dataset nexarch-selfplay-$DATE "$D" "Self-play on $DATE, $N positions, Gen 2 to Gen 4 networks" \
   || { say "UPLOAD FAILED: the local file is still in $OUT"; exit 1; }
 touch data/selfplay-$DATE.done

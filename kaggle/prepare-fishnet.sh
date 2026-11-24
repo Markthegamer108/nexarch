@@ -65,8 +65,9 @@ else
   D=$HOME/.cache/nexarch-kds/nexarch-fishnet-$MONTH
   mkdir -p "$D"
   ln -f "$OUT" "$D/fishnet-$MONTH.bin" 2>/dev/null || cp "$OUT" "$D/fishnet-$MONTH.bin"
-  printf '{"title":"nexarch-fishnet-%s","id":"markthegamer108/nexarch-fishnet-%s","licenses":[{"name":"CC0-1.0"}]}\n' "$MONTH" "$MONTH" > "$D/dataset-metadata.json"
-  upload_dataset nexarch-fishnet-$MONTH "$D" "Lichess fishnet evaluations $MONTH, 1 in $EVERY, $N positions, Nexarch format" \
+  printf '{"title":"nexarch-fishnet-%s","id":"markthegamer108/nexarch-fishnet-%s","licenses":[{"name":"MIT"}]}\n' "$MONTH" "$MONTH" > "$D/dataset-metadata.json"
+  mit_license "$D"
+  upload_dataset nexarch-fishnet-$MONTH "$D" "Lichess fishnet evaluations $MONTH (CC0), 1 in $EVERY, $N positions, converted to Nexarch format by Mark Ivanovskyy (MIT)" \
     || { say "UPLOAD FAILED"; exit 1; }
   say "ready: markthegamer108/nexarch-fishnet-$MONTH, $N positions"
 fi

@@ -3,6 +3,7 @@ GH=$HOME/.local/bin/gh
 
 say() { echo "$(TZ=Europe/Berlin date '+%F %H:%M:%S') $*" >> "$LOG"; }
 mem() { awk '/MemAvailable/{print int($2/1024)}' /proc/meminfo; }
+mit_license() { [ -s "$1/LICENSE" ] || cp LICENSE "$1/LICENSE"; }
 
 kernel_state() {
   $KAGGLE kernels status "markthegamer108/$1" 2>&1 | tail -1 | grep -o '"KernelWorkerStatus\.[A-Z_]*"' | tr -d '"' | sed 's/^KernelWorkerStatus\.//'

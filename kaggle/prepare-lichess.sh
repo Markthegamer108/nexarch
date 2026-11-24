@@ -27,8 +27,9 @@ while [ ! -s nets/lichess-calibration.json ]; do sleep 60; done
 D=$HOME/.cache/nexarch-kds/nexarch-lichess-evals
 mkdir -p "$D"
 for f in data/lichess/lichess-*.bin; do ln -f "$f" "$D/$(basename "$f")" 2>/dev/null || cp "$f" "$D/"; done
-printf '{"title":"nexarch-lichess-evals","id":"markthegamer108/nexarch-lichess-evals","licenses":[{"name":"CC0-1.0"}]}\n' > "$D/dataset-metadata.json"
-upload_dataset nexarch-lichess-evals "$D" "Lichess evaluation database (CC0), best line of the deepest evaluation, Nexarch format" \
+printf '{"title":"nexarch-lichess-evals","id":"markthegamer108/nexarch-lichess-evals","licenses":[{"name":"MIT"}]}\n' > "$D/dataset-metadata.json"
+mit_license "$D"
+upload_dataset nexarch-lichess-evals "$D" "Lichess evaluation database (CC0), best line of the deepest evaluation, converted to Nexarch format by Mark Ivanovskyy (MIT)" \
   || { say "UPLOAD FAILED"; exit 1; }
 touch data/lichess/lichess.done
 say "ready: markthegamer108/nexarch-lichess-evals"

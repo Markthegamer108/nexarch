@@ -38,7 +38,15 @@ D=$HOME/.cache/nexarch-kds/nexarch-t80-$MONTH
 mkdir -p "$D"
 ln -f "$OUT" "$D/t80-$MONTH.bin" 2>/dev/null || cp "$OUT" "$D/t80-$MONTH.bin"
 printf '{"title":"nexarch-t80-%s","id":"markthegamer108/nexarch-t80-%s","licenses":[{"name":"DbCL-1.0"}]}\n' "$MONTH" "$MONTH" > "$D/dataset-metadata.json"
-upload_dataset "nexarch-t80-$MONTH" "$D" "Leela T80 $MONTH, 1 in $EVERY positions, Nexarch format, scores on Nexarch's scale" \
+cat > "$D/LICENSE" <<EOF
+The positions in this dataset come from the Leela Chess Zero T80 training data,
+distributed by linrock at https://huggingface.co/datasets/linrock/test80-$YEAR.
+The database is made available under the Open Database License (ODbL) v1.0 and its
+individual contents under the Database Contents License (DbCL) v1.0.
+The conversion to Nexarch's format was done by Mark Ivanovskyy with
+tools/binpack/binpack2nexarch.cpp; the converted file stays under DbCL/ODbL.
+EOF
+upload_dataset "nexarch-t80-$MONTH" "$D" "Leela Chess Zero T80 $MONTH via linrock, 1 in $EVERY, Nexarch format, DbCL/ODbL" \
   || { say "UPLOAD FAILED"; exit 1; }
 touch "data/lc0/t80-$MONTH.done"
 say "ready: markthegamer108/nexarch-t80-$MONTH"

@@ -13,7 +13,8 @@ done
 D=/home/mark/.cache/nexarch-kds/nexarch-graded-g2
 mkdir -p "$D"
 ln -f data/graded-g2-all.bin "$D/graded-g2-all.bin" 2>/dev/null || cp data/graded-g2-all.bin "$D/graded-g2-all.bin"
-printf '{"title":"nexarch-graded-g2","id":"markthegamer108/nexarch-graded-g2","licenses":[{"name":"other"}]}\n' > "$D/dataset-metadata.json"
+printf '{"title":"nexarch-graded-g2","id":"markthegamer108/nexarch-graded-g2","licenses":[{"name":"MIT"}]}\n' > "$D/dataset-metadata.json"
+mit_license "$D"
 if upload_dataset nexarch-graded-g2 "$D" "graded g2: lc0 + cpu panel + actions panel"; then
   say "saved as markthegamer108/nexarch-graded-g2"
 else

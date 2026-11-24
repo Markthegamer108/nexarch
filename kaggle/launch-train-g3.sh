@@ -20,7 +20,8 @@ else
   mkdir -p "$D"
   ln -f data/graded-g3-full.bin "$D/graded-g3-full.bin" 2>/dev/null || cp data/graded-g3-full.bin "$D/graded-g3-full.bin"
   cp -f nets/nexarch-g2.pt "$D/nexarch-g2.pt"
-  printf '{"title":"nexarch-graded-g3","id":"markthegamer108/nexarch-graded-g3","licenses":[{"name":"other"}]}\n' > "$D/dataset-metadata.json"
+  printf '{"title":"nexarch-graded-g3","id":"markthegamer108/nexarch-graded-g3","licenses":[{"name":"MIT"}]}\n' > "$D/dataset-metadata.json"
+  mit_license "$D"
   upload_dataset nexarch-graded-g3 "$D" "graded g2 + g2d, plus the Gen 2 checkpoint" || { say "UPLOAD FAILED: not training"; exit 1; }
 
   push_kernel nexarch-train-g3 40 .venv/bin/python kaggle/job.py --name nexarch-train-g3 --gpu --internet \
