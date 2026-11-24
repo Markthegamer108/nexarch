@@ -35,7 +35,7 @@ else
     --dataset markthegamer108/nexarch-fishnet-2025-01 \
     --dataset markthegamer108/nexarch-selfplay-2026-11-22 \
     --dataset markthegamer108/nexarch-g5-starts \
-    --cmd 'R=$(find /kaggle/input -name g5-a.pt -print -quit); test -n "$R" || exit 1; curl -sSfL --retry 5 -r 0-14999999999 -o /kaggle/working/fishpack32-part0.bin https://huggingface.co/datasets/mark43233/nexarch-binpacks/resolve/main/binpacks/fishpack32.bin; G5_BUDGET='"$BUDGET"' G5_EPOCHS=8 G5_ONLY=g5-a G5_RESUME="$R" G5_A_LR=0.0003 G5_EXTRA_DATA=/kaggle/working/fishpack32-part0.bin bash kaggle/train-g5.sh {out} {cpus}' \
+    --cmd 'R=$(find /kaggle/input -name g5-a.pt -print -quit); test -n "$R" || exit 1; curl -sSfL --retry 5 -r 0- https://huggingface.co/datasets/mark43233/nexarch-binpacks/resolve/main/binpacks/fishpack32.bin | head -c 15000000000 > /kaggle/working/fishpack32-part0.bin; test "$(stat -c %s /kaggle/working/fishpack32-part0.bin)" = 15000000000; G5_BUDGET='"$BUDGET"' G5_EPOCHS=8 G5_ONLY=g5-a G5_RESUME="$R" G5_A_LR=0.0003 G5_EXTRA_DATA=/kaggle/working/fishpack32-part0.bin bash kaggle/train-g5.sh {out} {cpus}' \
     --push || { say "could not launch $NAME"; exit 1; }
 fi
 bash kaggle/ensure-kernel.sh "$NAME"
