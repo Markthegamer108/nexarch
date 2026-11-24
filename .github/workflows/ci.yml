@@ -54,3 +54,20 @@ jobs:
         run: python trainer/train.py --data ci.bin --out ci.nnue --hidden 32 --epochs 2 --batch 4096
       - name: Engine loads the trained network
         run: printf 'setoption name EvalFile value ci.nnue\nposition startpos\neval\n' | ./engine/nexarch | grep 'using ci.nnue'
+
+  pipeline-tests:
+    name: data and job scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install test dependencies
+        run: pip install numpy chess
+      - name: Holdout audit
+        run: python tests/test_holdout.py
+      - name: Panel benchmark
+        run: python tests/test_panel.py
+      - name: Kaggle output collection
+        run: bash tests/test_collect_g5.sh

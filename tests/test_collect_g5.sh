@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-T=$(mktemp -d "${TMPDIR:-/tmp/opencode}/collect-g5.XXXXXX")
+T=$(mktemp -d "${TMPDIR:-/tmp}/collect-g5.XXXXXX")
 trap 'rm -f "$T/kaggle" "$T/calls"; rm -rf "$T/out"; rmdir "$T" 2>/dev/null || true' EXIT
 export G5_OUTPUT_ROOT=$T/out G5_KAGGLE_CLI=$T/kaggle
 export CALLS=$T/calls
