@@ -63,6 +63,13 @@ programs, and none of their code is part of Nexarch. What each one judges, and i
   database, computed by Lichess's distributed Stockfish analysis (fishnet) and released under CC0 at
   [huggingface.co/datasets/Lichess/fishnet-evals](https://huggingface.co/datasets/Lichess/fishnet-evals).
   Nexarch streams monthly slices of it instead of holding the whole thing.
+- **The Stockfish binpack collection**, by the Stockfish project and its contributors, at
+  [huggingface.co/datasets/official-stockfish/master-binpacks](https://huggingface.co/datasets/official-stockfish/master-binpacks).
+  Released under the Open Database License (ODbL) v1.0. Nexarch converts the `fishpack32` binpack to its
+  own format with `tools/binpack/binpack2nexarch` and keeps the converted file under the same license.
+- **Nexarch's own data conversions, manifests and evaluation sets**, by Mark Ivanovskyy, are MIT licensed
+  unless the source data requires a different license. The Gen 5 unseen evaluation set is MIT; the
+  fishpack32 conversion stays ODbL because its source does.
 
 ## Testing
 
