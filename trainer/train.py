@@ -301,6 +301,9 @@ def main_stream(args, dev):
                 if step_limit is not None and done >= step_limit:
                     stop = True
                     break
+                if args.time_budget and time.time() - start >= args.time_budget * 60:
+                    stop = True
+                    break
                 idx = perm[i * args.batch:(i + 1) * args.batch]
                 loss = loss_on(tr[0][idx], tr[1][idx], tr[2][idx])
                 opt.zero_grad(set_to_none=True)
@@ -432,6 +435,9 @@ def main():
         stop = False
         for i in range(steps_per_epoch):
             if step_limit is not None and done >= step_limit:
+                stop = True
+                break
+            if args.time_budget and time.time() - start >= args.time_budget * 60:
                 stop = True
                 break
             idx = perm[i * args.batch:(i + 1) * args.batch]
