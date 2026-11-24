@@ -43,6 +43,7 @@ has the list, what each one does, their licenses and where to download them.
 | Gen 2 | Gen 0's games, scored by Stockfish | +129 Elo vs Gen 1 |
 | Gen 3 | Gen 2's games (33.5M positions), scored by the whole panel and Lc0 | +300 Elo vs Gen 2: 84.9% in 400 timed games (84.2% at 5,000 nodes), 512 neurons |
 | Gen 4 | 560M positions: Gen 2's graded games, Leela's public training data and the Lichess evaluations | **+271 Elo vs Gen 3: 82.6% in 400 timed games, 1024 neurons** |
+| Gen 5 | 2.04B positions available: graded games, Leela T80, Lichess and fishnet evaluations, and self-play | Both widths passed the streaming smoke test. The h2048 training run is queued; no match result yet. |
 
 Gen 1 and Gen 2 were tested with 400 games at 5,000 nodes per move. From Gen 3 on, every candidate plays
 the previous generation with a fixed time per move instead, so a bigger, slower network has to earn its
