@@ -21,6 +21,7 @@ if [ -z "$FINAL" ]; then
     P=$(find "$IN" -name "$name.pt" -print -quit)
     if [ -z "$N" ] && [ -n "$P" ]; then
       "$PY" tools/export_net.py --pt "$P" --nnue "$OUT/$name.nnue" || exit 1
+      cp "$P" "$OUT/$name.pt"
       N="$OUT/$name.nnue"
     fi
     [ -n "$N" ] || continue
