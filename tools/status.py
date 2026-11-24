@@ -70,23 +70,22 @@ def main():
     local_day = positions("data/data-g4a-day-local.bin")
     pool, verdict = audit()
     used, left = quota()
-    grades = kernel("nexarch-grade-selfplay-lc0")
-    smoke = kernel("nexarch-smoke-g5")
+    holdout = kernel("nexarch-holdout-g5")
+    train = kernel("nexarch-train-g5-a")
+    confirm = kernel("nexarch-confirm-g5")
     now = time.strftime("%a %d %b, %H:%M %Z")
-    aws_today = a["size"] // 32
-    per_day = a["rate"] * 86400
     rows = [
-        ("Self-play, AWS Stockholm", f"{a['rate']} pos/s", f"{aws_today:,} today, {per_day / 1e6:.1f}M/day", a["up"]),
-        ("Self-play, laptop", "1 chunk loop", f"{local_day:,} today", True),
-        ("Self-play, 5 Kaggle CPU shards", "12 h window", "ends 19:45", True),
-        ("Lc0 grading, 20M sample", grades, "finishes ~02:00", grades == "RUNNING"),
-        ("Gen 5 smoke test", smoke, "45 min, both widths", smoke in ("RUNNING", "QUEUED")),
+        ("Gen 5 h2048 training", train, "600 min, 2.04B positions", train in ("RUNNING", "QUEUED")),
+        ("Frozen-holdout audit", holdout, "201,517 unseen evaluation positions", holdout == "COMPLETE"),
+        ("Gen 5 confirmation", confirm, "400 games vs Gen 4, 33-engine panel", confirm in ("RUNNING", "QUEUED", "COMPLETE")),
+        ("Fishnet backlog", "paused", "resumes after the primary run", False),
+        ("Self-play", "idle", "resumes after the primary run", False),
     ]
     cards = [
         ("Training pool", f"{pool / 1e9:.2f}B", "positions, audited" if verdict == "PASS" else "audit pending"),
-        ("AWS output", f"{per_day / 1e6:.0f}M", f"positions/day at {a['rate']} pos/s"),
-        ("Kaggle GPU", f"{left}", f"left of 30h, resets Sat"),
-        ("Next milestone", "Gen 5", "h4096 + h2048 on 2.6B"),
+        ("Frozen eval", "201,517", "positions never trained on"),
+        ("Kaggle GPU", f"{left}", "left of 30h, resets Sat"),
+        ("Next milestone", "Gen 5", "more data, then h4096"),
     ]
     tr = "\n".join(
         f"<tr><td>{html.escape(n)}</td><td class=m>{html.escape(v)}</td><td class=d>{html.escape(d)}</td>"
