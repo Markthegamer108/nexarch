@@ -66,8 +66,6 @@ def bar(value, target, width=220):
 
 
 def main():
-    a = aws()
-    local_day = positions("data/data-g4a-day-local.bin")
     pool, verdict = audit()
     used, left = quota()
     holdout = kernel("nexarch-holdout-g5")
