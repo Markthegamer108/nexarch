@@ -43,13 +43,30 @@ has the list, what each one does, their licenses and where to download them.
 | Gen 2 | Gen 0's games, scored by Stockfish | +129 Elo vs Gen 1 |
 | Gen 3 | Gen 2's games (33.5M positions), scored by the whole panel and Lc0 | +300 Elo vs Gen 2: 84.9% in 400 timed games (84.2% at 5,000 nodes), 512 neurons |
 | Gen 4 | 560M positions: Gen 2's graded games, Leela's public training data and the Lichess evaluations | **+271 Elo vs Gen 3: 82.6% in 400 timed games, 1024 neurons** |
-| Gen 5 | 2.04B positions available: graded games, Leela T80, Lichess and fishnet evaluations, and self-play | Both widths passed the streaming smoke test. The h2048 training run is queued; no match result yet. |
+| Gen 5 | 2.04B positions available: graded games, Leela T80, Lichess and fishnet evaluations, and self-play | h2048 primary run in progress; frozen-holdout audit passed (2,042,685,943 training positions, 0 malformed, 201,517 eval positions unseen); h4096 deferred until the quota covers a full run. Not promoted; no match result yet. |
 
 Gen 1 and Gen 2 were tested with 400 games at 5,000 nodes per move. From Gen 3 on, every candidate plays
 the previous generation with a fixed time per move instead, so a bigger, slower network has to earn its
 size. Either way, take the exact numbers with a grain of salt.
 For reference, Stockfish 19 is about 3650 on CCRL. If Nexarch ever gets close, I'll submit it to CCRL
 so it gets tested properly, instead of me just saying it's strong.
+
+## Plan
+
+Gen 5 is the current experiment: one h2048 candidate trained on 2.04B positions. h4096 only starts after
+the GPU quota can cover a complete run with its checkpoints, and never while the h2048 candidate is still
+running.
+
+Training finishing is not the same as Gen 5 being done. A candidate is called Gen 5 only after it clears
+all of these:
+
+- the frozen-holdout audit finds no training positions in the evaluation set;
+- it beats Gen 4 in 400 timed games by a gain in line with the earlier generations (roughly +200 Elo or
+  more), with the 95% interval clearly above zero;
+- the 33-engine panel and Lc0 show the same gain, not just one lucky opponent.
+
+If it misses that bar, the next step is more or better training for the same generation, not Gen 6
+self-play. Gen 6 only starts after Gen 5 has been verified and published.
 
 ## Building
 
@@ -73,14 +90,14 @@ Options:
 - `Move Overhead`: how many milliseconds it keeps as a safety margin each move
 - `EvalFile`: which `.nnue` network to use (`material` turns the network off)
 
-The newest network is `nets/nexarch-g3.nnue`.
+The newest promoted network is `nets/nexarch-g4.nnue`.
 
 There are also some extra commands I use while working on it:
 
 ```
 ./nexarch perftsuite [deep]     # checks move generation on six tricky positions
 ./nexarch bench 12              # speed test
-./nexarch datagen threads=8 nodes=5000 seconds=3600 net=nets/nexarch-g3.nnue out=data.bin
+./nexarch datagen threads=8 nodes=5000 seconds=3600 net=nets/nexarch-g4.nnue out=data.bin
 ./nexarch match a=new.nnue b=old.nnue games=400 nodes=5000 threads=8
 ```
 
@@ -88,10 +105,10 @@ There are also some extra commands I use while working on it:
 
 ```
 pip install numpy torch chess
-./engine/nexarch datagen threads=8 nodes=5000 seconds=3600 net=nets/nexarch-g3.nnue out=data/selfplay.bin
+./engine/nexarch datagen threads=8 nodes=5000 seconds=3600 net=nets/nexarch-g4.nnue out=data/selfplay.bin
 python tools/grade.py --config nets/graders.json --data data/selfplay.bin --out data/graded.bin --workers 2
 python trainer/train.py --data data/graded.bin --out nets/my-net.nnue --hidden 128 --epochs 40
-./engine/nexarch match a=nets/my-net.nnue b=nets/nexarch-g3.nnue games=400 nodes=5000 threads=8
+./engine/nexarch match a=nets/my-net.nnue b=nets/nexarch-g4.nnue games=400 nodes=5000 threads=8
 ```
 
 Grading takes the longest. Every worker runs around 30 engines at once and uses about 3 GB of RAM, so
@@ -100,7 +117,7 @@ don't start too many. I do most of the heavy stuff on Kaggle, and the scripts fo
 
 ## Credits
 
-A lot of other people's work goes into Nexarch: the 32 engines and networks that grade its training data,
+A lot of other people's work goes into Nexarch: the 33 engines and networks that grade its training data,
 Leela Chess Zero's public training data, the Lichess evaluation database, Stockfish's data tools, and the
 libraries and free computers it all runs on. [CREDITS.md](CREDITS.md) lists every one of them.
 
