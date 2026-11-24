@@ -1,0 +1,22 @@
+{
+	"BUILD_DIR" : "/tmp/opencode/cutechess-1.5.1/build/cli_autogen",
+	"CMAKE_BINARY_DIR" : "/tmp/opencode/cutechess-1.5.1/build",
+	"CMAKE_CURRENT_BINARY_DIR" : "/tmp/opencode/cutechess-1.5.1/build",
+	"CMAKE_CURRENT_SOURCE_DIR" : "/tmp/opencode/cutechess-1.5.1",
+	"CMAKE_SOURCE_DIR" : "/tmp/opencode/cutechess-1.5.1",
+	"CROSS_CONFIG" : false,
+	"GENERATOR" : "Ninja",
+	"INCLUDE_DIR" : "/tmp/opencode/cutechess-1.5.1/build/cli_autogen/include",
+	"INPUTS" : [ "/tmp/opencode/cutechess-1.5.1/projects/cli/res/doc/help.txt" ],
+	"LOCK_FILE" : "/tmp/opencode/cutechess-1.5.1/build/CMakeFiles/cli_autogen.dir/AutoRcc_doc_SJPZDV6HL2_Lock.lock",
+	"MULTI_CONFIG" : false,
+	"OPTIONS" : [ "-name", "doc" ],
+	"OUTPUT_CHECKSUM" : "SJPZDV6HL2",
+	"OUTPUT_NAME" : "qrc_doc.cpp",
+	"RCC_EXECUTABLE" : "/usr/lib/qt6/rcc",
+	"RCC_LIST_OPTIONS" : [ "--list" ],
+	"SETTINGS_FILE" : "/tmp/opencode/cutechess-1.5.1/build/CMakeFiles/cli_autogen.dir/AutoRcc_doc_SJPZDV6HL2_Used.txt",
+	"SOURCE" : "/tmp/opencode/cutechess-1.5.1/projects/cli/res/doc/doc.qrc",
+	"USE_BETTER_GRAPH" : true,
+	"VERBOSITY" : 0
+}
