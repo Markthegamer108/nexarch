@@ -1,7 +1,0 @@
-{
-	"InstallScripts" : 
-	[
-		"/tmp/opencode/cutechess-1.5.1/build/cmake_install.cmake"
-	],
-	"Parallel" : false
-}
