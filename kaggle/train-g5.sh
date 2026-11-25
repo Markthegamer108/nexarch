@@ -10,11 +10,9 @@ ONLY=${G5_ONLY:-g5-a}
 PY=${PYTHON:-python}
 DATA=("$IN/**/graded-g3-full.bin" "$IN/**/t80-*.bin" "$IN/**/lichess-*.bin" "$IN/**/fishnet-*.bin" "$IN/**/selfplay-*.bin")
 [ -n "${G5_EXTRA_DATA:-}" ] && DATA+=("$G5_EXTRA_DATA")
-S2048=${G5_RESUME:-$(find "$IN" -name nexarch-g5-h2048-start.pt -print -quit)}
-S4096=$(find "$IN" -name nexarch-g5-h4096-start.pt -print -quit)
-[ -n "$S2048" ] && [ -n "$S4096" ] || { echo "start checkpoints nexarch-g5-h2048-start.pt / nexarch-g5-h4096-start.pt not found in $IN"; exit 1; }
+MODE=${G5_MODE:-h2048}
 mkdir -p "$OUT"
-echo "Gen 5: budget ${BUDGET} min, $EPOCHS epochs, data under $IN"
+echo "Gen 5 $MODE: budget ${BUDGET} min, $EPOCHS epochs, data under $IN"
 
 train() {
   local name=$1 gpu=$2 hidden=$3 start=$4 lr=$5 batch=$6
@@ -31,6 +29,26 @@ train() {
   fi
 }
 
+if [ "$MODE" = h1024 ]; then
+  S1024=${G5_RESUME:-$(find "$IN" -name nexarch-g4.pt -print -quit)}
+  [ -n "$S1024" ] || { echo "Gen 4 checkpoint nexarch-g4.pt not found in $IN"; exit 1; }
+  echo "Gen 5 h1024: continuing $S1024"
+  if [ "$ONLY" = g5-b ]; then
+    train g5-b 1 1024 "$S1024" "${G5_B_LR:-0.0004}" 8192
+  elif [ "$ONLY" = g5-a ]; then
+    train g5-a 0 1024 "$S1024" "${G5_A_LR:-0.0002}" 8192
+  else
+    ( train g5-a 0 1024 "$S1024" "${G5_A_LR:-0.0002}" 8192 ) &
+    ( train g5-b 1 1024 "$S1024" "${G5_B_LR:-0.0004}" 8192 ) &
+    wait
+  fi
+  [ -f "$OUT/g5-a.nnue" ] || [ -f "$OUT/g5-b.nnue" ] || { echo "no candidate survived training"; exit 1; }
+  echo "candidates: $(ls "$OUT"/g5-[ab].nnue 2>/dev/null | xargs -r -n1 basename | tr '\n' ' ')"
+  exit 0
+fi
+S2048=${G5_RESUME:-$(find "$IN" -name nexarch-g5-h2048-start.pt -print -quit)}
+S4096=$(find "$IN" -name nexarch-g5-h4096-start.pt -print -quit)
+[ -n "$S2048" ] && [ -n "$S4096" ] || { echo "start checkpoints nexarch-g5-h2048-start.pt / nexarch-g5-h4096-start.pt not found in $IN"; exit 1; }
 if [ "${G5_SEQ:-0}" = 1 ]; then
   [ "$ONLY" = g5-b ] || train g5-a 0 2048 "$S2048" "${G5_A_LR:-0.0006}" 8192
   [ "$ONLY" = g5-a ] || train g5-b 0 4096 "$S4096" "${G5_B_LR:-0.0004}" 4096

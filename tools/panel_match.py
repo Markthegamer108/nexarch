@@ -37,26 +37,45 @@ def opening_pairs(path, count, seed):
     return random.Random(seed).sample(list(books.values()), count)
 
 
-def opponents(path):
+def opponents(path, allow_missing=False):
     entries = json.loads(path.read_text(encoding="utf-8"))["engines"]
     seen = set()
     result = []
+    skipped = []
     for entry in entries:
-        name, executable = entry["name"], Path(entry["path"]).resolve(strict=True)
-        if name in seen or not os.access(executable, os.X_OK):
+        name = entry["name"]
+        executable = Path(entry["path"])
+        if not executable.is_file() or not os.access(executable, os.X_OK):
+            if allow_missing:
+                skipped.append({"name": name, "missing": str(executable)})
+                print(f"skipping missing panel engine: {name} ({executable})", flush=True)
+                continue
+            raise ValueError(f"invalid panel entry: {name}")
+        executable = executable.resolve()
+        if name in seen:
             raise ValueError(f"invalid panel entry: {name}")
         seen.add(name)
         options = {}
+        missing = None
         for line in entry["init"]:
             m = re.fullmatch(r"setoption name (.+?) value (.+)", line)
             if not m:
                 raise ValueError(f"invalid UCI option for {name}: {line}")
             key, value = m.groups()
-            options[key] = value.replace("{dir}", str(executable.parent))
+            value = value.replace("{dir}", str(executable.parent))
+            if Path(value).is_absolute() and not Path(value).is_file():
+                missing = value
+            options[key] = value
+        if missing is not None:
+            if allow_missing:
+                skipped.append({"name": name, "missing": missing})
+                print(f"skipping missing panel engine: {name} ({missing})", flush=True)
+                continue
+            raise ValueError(f"missing panel file for {name}: {missing}")
         if name == "Maia 1900":
             options.update(Backend="eigen", MinibatchSize=1)
         result.append((name, executable, options))
-    return result
+    return result, skipped
 
 
 def nx_player(name, executable, network):
@@ -216,9 +235,15 @@ def run(args):
     candidate = nx_player("candidate", exe, args.candidate.resolve(strict=True))
     gen4 = nx_player("gen4", exe, args.incumbent.resolve(strict=True))
     own = [candidate] if args.direct else [candidate, gen4]
-    foes = [gen4] if args.direct else opponents(args.panel)
-    if not args.direct and len(foes) != args.expect:
+    skipped = []
+    if args.direct:
+        foes = [gen4]
+    else:
+        foes, skipped = opponents(args.panel, args.allow_missing)
+    if not args.direct and not args.allow_missing and len(foes) != args.expect:
         raise ValueError(f"expected {args.expect} panel entries, got {len(foes)}")
+    if not args.direct and args.allow_missing and not foes:
+        raise ValueError("no usable panel entries")
     names = [spec[0] for spec in foes]
     labels = [spec[0] for spec in own]
     if set(names) & set(labels):
@@ -232,6 +257,7 @@ def run(args):
               "timeout_seconds": args.timeout, "pairs": args.pairs, "cpus": cpus[:concurrency], "cpu_model": cpu_name,
               "system": platform.platform(), "python": platform.python_version(), "chess": chess.__version__,
               "book_sha256": sha256(args.book), "opponents": [describe(x) for x in foes], "arms": [describe(x) for x in own],
+              "panel_expected": args.expect, "panel_skipped": skipped,
               "openings_sha256": hashlib.sha256("\n".join(openings).encode()).hexdigest()}
     args.out.mkdir(parents=True, exist_ok=True)
     db = args.out / "matches.sqlite3"
@@ -265,6 +291,7 @@ def main():
     p.add_argument("--max-plies", type=int, default=600)
     p.add_argument("--timeout", type=float, default=15)
     p.add_argument("--expect", type=int, default=33)
+    p.add_argument("--allow-missing", action="store_true")
     p.add_argument("--direct", action="store_true")
     args = p.parse_args()
     if min(args.movetime, args.pairs, args.concurrency, args.max_plies, args.timeout, args.expect) <= 0 or args.nodes < 0:
