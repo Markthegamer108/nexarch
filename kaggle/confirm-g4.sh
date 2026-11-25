@@ -1,5 +1,9 @@
 #!/bin/bash
 set -u
+# SPDX-License-Identifier: MIT
+# Copyright (C) 2026 Mark Ivanovskyy
+
+set -euo pipefail
 OUT=${1:?output dir}
 CPUS=${2:-4}
 cd "$(dirname "$0")/.."

@@ -1,9 +1,16 @@
 #!/bin/bash
-set -u
+# SPDX-License-Identifier: MIT
+# Copyright (C) 2026 Mark Ivanovskyy
+#
+# Launch Gen 3 training after combined dataset is ready.
+
+set -euo pipefail
 cd "$(dirname "$0")/.."
+
 LOG=kaggle-out/launch-train-g3.log
 mkdir -p kaggle-out
 . kaggle/lib.sh
+
 say "waiting for data/graded-g3-full.done"
 while [ ! -f data/graded-g3-full.done ]; do
   [ -f data/graded-g3-full.failed ] && { say "building the combined set failed: not training (kaggle-out/finish-g3.log)"; exit 1; }

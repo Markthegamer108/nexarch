@@ -1,6 +1,13 @@
 #!/bin/bash
-set -u
+# SPDX-License-Identifier: MIT
+# Copyright (C) 2026 Mark Ivanovskyy
+#
+# Launch Gen 5 h1024 training on Kaggle GPU.
+# Trains on full dataset (2.04B + fishpack32) from Gen 4 checkpoint.
+
+set -euo pipefail
 cd "$(dirname "$0")/.."
+
 NAME=${G5_H1024_NAME:-nexarch-train-g5-h1024}
 LOG=kaggle-out/launch-$NAME.log
 mkdir -p kaggle-out

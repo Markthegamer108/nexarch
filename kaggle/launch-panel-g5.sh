@@ -1,6 +1,13 @@
 #!/bin/bash
-set -u
+# SPDX-License-Identifier: MIT
+# Copyright (C) 2026 Mark Ivanovskyy
+#
+# Launch 33-engine panel benchmark on Kaggle CPU.
+# Compares Gen 5 candidate vs Gen 4 baseline across 32 engines (Maia 1900 skipped).
+
+set -euo pipefail
 cd "$(dirname "$0")/.."
+
 NAME=${PANEL_NAME:-nexarch-panel-g5}
 LOG=kaggle-out/launch-$NAME.log
 mkdir -p kaggle-out

@@ -1,5 +1,9 @@
 #!/bin/bash
 set -u
+# SPDX-License-Identifier: MIT
+# Copyright (C) 2026 Mark Ivanovskyy
+
+set -euo pipefail
 cd "$(dirname "$0")/.."
 MONTH=${1:?month, e.g. 2024-01-jan}
 EVERY=${2:-10}

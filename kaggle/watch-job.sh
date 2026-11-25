@@ -1,5 +1,9 @@
 #!/bin/bash
 cd "$(dirname "$0")/.."
+# SPDX-License-Identifier: MIT
+# Copyright (C) 2026 Mark Ivanovskyy
+
+set -euo pipefail
 K=markthegamer108/$1
 OUT=kaggle-out/$1
 POLL=${WATCH_POLL:-120}

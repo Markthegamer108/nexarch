@@ -83,8 +83,8 @@ for ds in "${DATASETS[@]}"; do
     DATA_GLOBS+=("/kaggle/input/$ds_name/**/*.zst")
 done
 # Also add acquired data (will be mounted separately)
-for f in data/acquired/fishtest/*.bin data/acquired/lc0/*.bin data/acquired/games/*.bin data/acquired/games/*.pgn data/acquired/games/*.zst data/acquired/distilled/*.pgn 2>/dev/null; do
-    [ -f "$f" ] && DATA_GLOBS+=("$f")
+for f in data/acquired/fishtest/*.bin data/acquired/lc0/*.bin data/acquired/games/*.bin data/acquired/games/*.pgn data/acquired/games/*.zst data/acquired/distilled/*.pgn; do
+    [ -f "$f" ] 2>/dev/null && DATA_GLOBS+=("$f")
 done
 
 say "Data globs: ${#DATA_GLOBS[@]} patterns"

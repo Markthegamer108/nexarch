@@ -1,6 +1,12 @@
 #!/bin/bash
-set -u
+# SPDX-License-Identifier: MIT
+# Copyright (C) 2026 Mark Ivanovskyy
+#
+# Legacy Gen 5 launch script (h2048/h4096). Superseded by launch-train-g5-h1024.sh.
+
+set -euo pipefail
 cd "$(dirname "$0")/.."
+
 NAME=${G5_LAUNCH_NAME:-nexarch-train-g5}
 LOG=kaggle-out/launch-$NAME.log
 mkdir -p kaggle-out

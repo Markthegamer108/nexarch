@@ -13,6 +13,9 @@ UPLOADED_LOG="$ACQUIRED/master/uploaded_datasets.txt"
 mkdir -p "$ACQUIRED/master"
 touch "$UPLOADED_LOG"
 
+LOG="kaggle-out/upload-$(date -u +%Y%m%d-%H%M%S).log"
+mkdir -p kaggle-out
+
 . kaggle/lib.sh
 
 say "=== UPLOAD ALL ACQUIRED DATA TO KAGGLE ==="
@@ -37,7 +40,7 @@ upload_file() {
 META
     echo "MIT License..." > "$ds_dir/LICENSE"
     
-    if .venv/bin/kaggle datasets create -p "$ds_dir" --public 2>&1 | tail-3; then
+    if .venv/bin/kaggle datasets create -p "$ds_dir" --public 2>&1 | tail -3; then
         say "    ✓ Uploaded ($(du -h "$file" | cut -f1)), deleting local"
         rm -f "$file"
         echo "$slug" >> "$UPLOADED_LOG"

@@ -1,5 +1,9 @@
 #!/bin/bash
 set -uo pipefail
+# SPDX-License-Identifier: MIT
+# Copyright (C) 2026 Mark Ivanovskyy
+
+set -euo pipefail
 cd "$(dirname "$0")/.."
 NAME=${1:?binpack name without .binpack}
 FILTER=${2:-0}

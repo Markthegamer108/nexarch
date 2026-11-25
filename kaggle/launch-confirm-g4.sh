@@ -1,9 +1,16 @@
 #!/bin/bash
-set -u
+# SPDX-License-Identifier: MIT
+# Copyright (C) 2026 Mark Ivanovskyy
+#
+# Wait for Gen 4 training to complete, then launch confirmation.
+
+set -euo pipefail
 cd "$(dirname "$0")/.."
+
 LOG=kaggle-out/launch-confirm-g4.log
 mkdir -p kaggle-out
 . kaggle/lib.sh
+
 say "waiting for Gen 4 to finish"
 while [ ! -f kaggle-out/nexarch-train-g4.done ]; do sleep 60; done
 grep -q 'COMPLETE' kaggle-out/nexarch-train-g4.done || { say "Gen 4 did not complete: not confirming"; exit 1; }

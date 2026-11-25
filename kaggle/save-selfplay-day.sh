@@ -1,5 +1,9 @@
 #!/bin/bash
 set -u
+# SPDX-License-Identifier: MIT
+# Copyright (C) 2026 Mark Ivanovskyy
+
+set -euo pipefail
 cd "$(dirname "$0")/.."
 DATE=${1:-$(TZ=Europe/Berlin date +%F)}
 LOG=kaggle-out/save-selfplay-day.log

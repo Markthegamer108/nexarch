@@ -36,8 +36,8 @@ while IFS= read -r line; do
 done < "$MASTER_SOURCES"
 
 # Also add any .bin files in acquired directories
-for f in data/acquired/fishtest/*.bin data/acquired/lc0/*.bin data/acquired/games/*.bin data/acquired/distilled/*.bin 2>/dev/null; do
-    [ -f "$f" ] && FILES+=("$f")
+for f in data/acquired/fishtest/*.bin data/acquired/lc0/*.bin data/acquired/games/*.bin data/acquired/distilled/*.bin; do
+    [ -f "$f" ] 2>/dev/null && FILES+=("$f")
 done
 
 # Deduplicate

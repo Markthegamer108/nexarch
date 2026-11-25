@@ -1,6 +1,12 @@
 #!/bin/bash
-set -u
+# SPDX-License-Identifier: MIT
+# Copyright (C) 2026 Mark Ivanovskyy
+#
+# Launch Gen 5 full-data continuation from h2048 checkpoint.
+
+set -euo pipefail
 cd "$(dirname "$0")/.."
+
 NAME=${G5_FULL_NAME:-nexarch-train-g5-full-a}
 LOG=kaggle-out/launch-$NAME.log
 mkdir -p kaggle-out

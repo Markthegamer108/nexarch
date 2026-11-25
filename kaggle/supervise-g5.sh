@@ -1,5 +1,9 @@
 #!/bin/bash
 set -uo pipefail
+# SPDX-License-Identifier: MIT
+# Copyright (C) 2026 Mark Ivanovskyy
+
+set -euo pipefail
 cd "$(dirname "$0")/.."
 mkdir -p kaggle-out
 exec 8>kaggle-out/.supervise-g5.lock

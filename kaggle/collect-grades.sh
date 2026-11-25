@@ -1,5 +1,9 @@
 #!/bin/bash
 set -u
+# SPDX-License-Identifier: MIT
+# Copyright (C) 2026 Mark Ivanovskyy
+
+set -euo pipefail
 cd "$(dirname "$0")/.."
 RUN=${1:-44898159439}
 LOG=kaggle-out/collect-grades.log

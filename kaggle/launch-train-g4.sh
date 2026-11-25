@@ -1,9 +1,16 @@
 #!/bin/bash
-set -u
+# SPDX-License-Identifier: MIT
+# Copyright (C) 2026 Mark Ivanovskyy
+#
+# Launch Gen 4 training after Gen 3 completes and datasets are ready.
+
+set -euo pipefail
 cd "$(dirname "$0")/.."
+
 LOG=kaggle-out/launch-train-g4.log
 mkdir -p kaggle-out
 . kaggle/lib.sh
+
 say "waiting for Gen 3 and both datasets"
 for m in kaggle-out/nexarch-train-g3.done data/lc0/t80-2024-01-jan.done data/lichess/lichess.done; do
   while [ ! -f "$m" ]; do sleep 60; done

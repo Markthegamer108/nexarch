@@ -1,5 +1,9 @@
 #!/bin/bash
 set -u
+# SPDX-License-Identifier: MIT
+# Copyright (C) 2026 Mark Ivanovskyy
+
+set -euo pipefail
 cd "$(dirname "$0")/.."
 DOMAIN=${1:-showplace-immunize-output.ngrok-free.dev}
 PORT=${2:-8765}

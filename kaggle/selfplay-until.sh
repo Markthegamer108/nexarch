@@ -1,5 +1,9 @@
 #!/bin/bash
 cd "$(dirname "$0")/.."
+# SPDX-License-Identifier: MIT
+# Copyright (C) 2026 Mark Ivanovskyy
+
+set -euo pipefail
 while kill -0 "$1" 2>/dev/null; do sleep 10; done
 END=$(TZ=Europe/Berlin date -d "$2" +%s); S=$((END - $(date +%s) - 20))
 if [ $S -gt 60 ]; then

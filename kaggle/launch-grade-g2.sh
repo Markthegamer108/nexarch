@@ -1,5 +1,9 @@
 #!/bin/bash
 set -e
+# SPDX-License-Identifier: MIT
+# Copyright (C) 2026 Mark Ivanovskyy
+
+set -euo pipefail
 cd "$(dirname "$0")/.."
 JOB=".venv/bin/python kaggle/job.py"
 DATA="'/kaggle/input/**/${DATAFILE:-nexarch-g2-full.bin}'"

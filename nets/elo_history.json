@@ -1,0 +1,11 @@
+[
+  {
+    "date": "2026-11-25T18:38:32.721934Z",
+    "label": "week-1-h2048-panel",
+    "candidate_elo_vs_sf19": -470.4,
+    "gen4_elo_vs_sf19": -470.4,
+    "gain_vs_baseline": -0.4,
+    "target_gain": 300,
+    "target_reached": false
+  }
+]

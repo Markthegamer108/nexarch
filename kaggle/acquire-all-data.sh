@@ -24,13 +24,36 @@ download() {
         return 0
     fi
     say "  Downloading $desc..."
-    if wget -q --show-progress -O "$dest" "$url" 2>&1 | tail -3; then
+    if wget -q --show-progress -O "$dest" "$url" 2>&1 | tail-3; then
         say "    $(du -h "$dest" | cut -f1)"
         return 0
     else
         say "    FAILED (continuing)"
         rm -f "$dest"
-        return 0  # Don't fail the whole script
+        return 0
+    fi
+}
+
+upload_and_clean() {
+    local file="$1" category="$2"  # category: fishtest, lc0, nets, games, etc.
+    local slug="nexarch-${category}-$(basename "$file" | sed 's/\.[^.]*$//')"
+    slug=$(echo "$slug" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g' | cut -c1-60)
+    
+    say "  Uploading to Kaggle: markthegamer108/$slug"
+    local ds_dir=$(mktemp -d)
+    cp "$file" "$ds_dir/$(basename "$file")"
+    cat > "$ds_dir/dataset-metadata.json" <<EOF
+{"title":"$slug","id":"markthegamer108/$slug","licenses":[{"name":"MIT"}]}
+EOF
+    echo "MIT License..." > "$ds_dir/LICENSE"
+    if .venv/bin/kaggle datasets create -p "$ds_dir" --public 2>&1 | tail-3; then
+        say "    ✓ Uploaded to markthegamer108/$slug, deleting local ($(du -h "$file" | cut -f1))"
+        rm -f "$file"
+        echo "$slug" >> "data/acquired/master/uploaded_datasets.txt"
+        return 0
+    else
+        say "    ✗ Upload failed, KEEPING LOCAL ($(du -h "$file" | cut -f1))"
+        return 1
     fi
 }
 

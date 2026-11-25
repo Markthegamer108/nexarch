@@ -1,5 +1,9 @@
 #!/bin/bash
 set -u
+# SPDX-License-Identifier: MIT
+# Copyright (C) 2026 Mark Ivanovskyy
+
+set -euo pipefail
 cd "$(dirname "$0")/.."
 FILE=${1:?self-play .bin file}
 DATE=${2:-$(TZ=Europe/Berlin date +%F)}

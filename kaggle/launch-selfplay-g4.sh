@@ -1,9 +1,20 @@
 #!/bin/bash
-set -u
+# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: MIT
+# Copyright (C) 2026 Mark Ivanovskyy
+
+set -euo pipefail
+# Copyright (C) 2026 Mark Ivanovskyy
+#
+# Launch Gen 4 self-play on Kaggle (5 workers).
+
+set -euo pipefail
 cd "$(dirname "$0")/.."
+
 LOG=kaggle-out/launch-selfplay-g4.log
 mkdir -p kaggle-out
 . kaggle/lib.sh
+
 SECS=${1:-12300}
 touch kaggle-out/sp-g4a-kernels.txt
 for i in 0 1 2 3 4; do
