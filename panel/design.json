@@ -1,0 +1,402 @@
+{
+  "movetime_ms": 100,
+  "nodes": 0,
+  "seed": 20261124,
+  "max_plies": 600,
+  "timeout_seconds": 15,
+  "pairs": 8,
+  "cpus": [
+    0,
+    1,
+    2
+  ],
+  "cpu_model": "Intel(R) Xeon(R) CPU @ 2.20GHz",
+  "system": "Linux-6.18.55+-x86_64-with-glibc2.39",
+  "python": "3.13.18",
+  "chess": "1.11.2",
+  "book_sha256": "e4ccf9297520743bb44705908b510ae45f817a146418c7773aaf44bed2cf8428",
+  "opponents": [
+    {
+      "name": "Stockfish 19",
+      "options": {
+        "Threads": "1",
+        "Hash": "16"
+      },
+      "sha256": {
+        "/tmp/nexarch/engines/bin/stockfish": "0f83d24cc46d2c66c60f16001af5444873bc112b7d028594513426894c12da19"
+      }
+    },
+    {
+      "name": "Triumviratus 8.0",
+      "options": {
+        "Threads": "1",
+        "Hash": "16"
+      },
+      "sha256": {
+        "/tmp/nexarch/engines/bin/triumviratus": "ecf91f514f72865f077cb505fedb135c012b49ecb22db5720d51b3cc2ae7849e"
+      }
+    },
+    {
+      "name": "Reckless 0.9.0",
+      "options": {
+        "Threads": "1",
+        "Hash": "16"
+      },
+      "sha256": {
+        "/tmp/nexarch/engines/bin/reckless": "09ba1634faaffec55d237a7efecfb27d5152f6f1400f24dd63af9bde00a054f6"
+      }
+    },
+    {
+      "name": "PlentyChess 8.0.0",
+      "options": {
+        "Threads": "1",
+        "Hash": "16"
+      },
+      "sha256": {
+        "/tmp/nexarch/engines/bin/plentychess": "9144597b17d4cf64fe5809adc7c5302ba80e455c1a1114d63d7fac2ee1692712",
+        "/tmp/nexarch/engines/real/plentychess": "bd3e811ee696cb602d716c48601b3298dd1944624d71ed6f1e1db86c0f0980ee"
+      }
+    },
+    {
+      "name": "pawnocchio 2.0.1",
+      "options": {
+        "Threads": "1",
+        "Hash": "16"
+      },
+      "sha256": {
+        "/tmp/nexarch/engines/bin/pawnocchio": "4c8b88c2d1f8140b738a3dbbfe65837dbe8c5ff0357f89b54031e003fa4b8fcd"
+      }
+    },
+    {
+      "name": "Coda 0.9.4",
+      "options": {
+        "Threads": "1",
+        "Hash": "16"
+      },
+      "sha256": {
+        "/tmp/nexarch/engines/bin/coda": "5919dbf153abfa7cb9f728f242723f3e7c218c35bc04e1b53bd02fceb121e5b8"
+      }
+    },
+    {
+      "name": "Integral v8",
+      "options": {
+        "Threads": "1",
+        "Hash": "16"
+      },
+      "sha256": {
+        "/tmp/nexarch/engines/bin/integral": "e512f6c8da92f7e68d5edef8fa8fdcc64d0b71f668067559541fee999fc4d339",
+        "/tmp/nexarch/engines/real/integral": "8f95e2281b099711ba7a4437b3e5f3f2207a06a8e30914bc2ed532a89e8ec447"
+      }
+    },
+    {
+      "name": "Cinder 0.6.1",
+      "options": {
+        "Threads": "1",
+        "Hash": "16"
+      },
+      "sha256": {
+        "/tmp/nexarch/engines/bin/cinder": "16b7c6ca425a64027d036e3109e9e3d2f93bfe1568e95b523fd3d1fd3e602869"
+      }
+    },
+    {
+      "name": "Obsidian 16.0",
+      "options": {
+        "Threads": "1",
+        "Hash": "16"
+      },
+      "sha256": {
+        "/tmp/nexarch/engines/bin/obsidian": "b40ea0850ffee35a2fa89e7823b0eaf6958cf8c62fd8cdbaac22d2acef42743e",
+        "/tmp/nexarch/engines/real/obsidian": "9d01a0286d7819a5f6410ea8876b5631df78c6729e6a0daeba262a1d9518c7ff"
+      }
+    },
+    {
+      "name": "Alexandria 9.1.0",
+      "options": {
+        "Threads": "1",
+        "Hash": "16"
+      },
+      "sha256": {
+        "/tmp/nexarch/engines/bin/alexandria": "9a0f949b9ad643cf00b37f2be981a40de3084fedf94b7747bf9e5d16bf836021",
+        "/tmp/nexarch/engines/real/alexandria": "93a370343f2626838c8a0df66a9cdc6700191299cd5310a4fd3d8084887d48dd"
+      }
+    },
+    {
+      "name": "Stormphrax 8.0.0",
+      "options": {
+        "Threads": "1",
+        "Hash": "16"
+      },
+      "sha256": {
+        "/tmp/nexarch/engines/bin/stormphrax": "4a1d4ade0709f8865df5d82999c3481dd4695494f3812f4685841f7f071e7c16",
+        "/tmp/nexarch/engines/real/stormphrax": "01aa7cfa6135a5ddd24ad80a85945b0b1c310d7f1f3fb41e3bea4951f38ef8f7"
+      }
+    },
+    {
+      "name": "Hobbes 3.0",
+      "options": {
+        "Threads": "1",
+        "Hash": "16"
+      },
+      "sha256": {
+        "/tmp/nexarch/engines/bin/hobbes": "acad986a0dd05a87f0cf392b4c6dab58f16b801879b6c317589b7a8e990b270b"
+      }
+    },
+    {
+      "name": "Viridithas 20.0.0",
+      "options": {
+        "Threads": "1",
+        "Hash": "16"
+      },
+      "sha256": {
+        "/tmp/nexarch/engines/bin/viridithas": "eb53de2fde546f3ba294407e3e8986dc3859bb1818f2ef4cf2fd85d077779973"
+      }
+    },
+    {
+      "name": "Caissa 2.0",
+      "options": {
+        "Threads": "1",
+        "Hash": "16"
+      },
+      "sha256": {
+        "/tmp/nexarch/engines/bin/caissa": "8c3ee0bc886021b5d87d1c590c41494593d7971e35d3b7fb11ced0f6b3b8d379",
+        "/tmp/nexarch/engines/real/caissa": "a75b39f1ead9c4787053ef50c81ea6aeac35cf5564ffdf2818b0224585ce39c4"
+      }
+    },
+    {
+      "name": "Astra 7.0",
+      "options": {
+        "Threads": "1",
+        "Hash": "16"
+      },
+      "sha256": {
+        "/tmp/nexarch/engines/bin/astra": "c7f39a2c665a6a32523580991ebb56338c5abfaf17fb9cc0f1e5f3f484e7ae93",
+        "/tmp/nexarch/engines/real/astra": "62d479eced56d2dafc98806a8cd8747eb06f580f4b03e721143cec9b28802447"
+      }
+    },
+    {
+      "name": "Berserk 14",
+      "options": {
+        "Threads": "1",
+        "Hash": "16"
+      },
+      "sha256": {
+        "/tmp/nexarch/engines/bin/berserk": "f41592ea0ae4c408b2723b55e9b65b364611dd913b6a4392eec6760f46f5e302"
+      }
+    },
+    {
+      "name": "Tarnished 6.0",
+      "options": {
+        "Threads": "1",
+        "Hash": "16"
+      },
+      "sha256": {
+        "/tmp/nexarch/engines/bin/tarnished": "fbb6882153ed20f4af6bdec55f669a46ef52e3fb556921418259290439ba697a"
+      }
+    },
+    {
+      "name": "Halogen 16",
+      "options": {
+        "Threads": "1",
+        "Hash": "16"
+      },
+      "sha256": {
+        "/tmp/nexarch/engines/bin/halogen": "b1e41b01951aaaed7113044ab668d18fd08b551a1e0c0971060b722bb9d4e7b5",
+        "/tmp/nexarch/engines/real/halogen": "26daae0d0c735319bde9b242b5a0855db396cf6737241f08a96e4e49e9bab942"
+      }
+    },
+    {
+      "name": "Quanticade Cronus 3.0",
+      "options": {
+        "Threads": "1",
+        "Hash": "16"
+      },
+      "sha256": {
+        "/tmp/nexarch/engines/bin/quanticade": "b07a5b607c20f5b306aa4276a6cb8dd06ca308b5dd7f2240e7f2e650bfa98884"
+      }
+    },
+    {
+      "name": "Clover 9.1",
+      "options": {
+        "Threads": "1",
+        "Hash": "16"
+      },
+      "sha256": {
+        "/tmp/nexarch/engines/bin/clover": "1a31b38a77a8a6c8547b68e1dbd0100d2baad07bcc8fa0f367cb2da659c68fe0",
+        "/tmp/nexarch/engines/real/clover": "43f7f9928d13bdebcfb0726aebba9fe657d2352834766f60ea30c291c248c169"
+      }
+    },
+    {
+      "name": "PZChessBot 7.1",
+      "options": {
+        "Threads": "1",
+        "Hash": "16"
+      },
+      "sha256": {
+        "/tmp/nexarch/engines/bin/pzchessbot": "47efe7d5840b288ca4dd519aa6ddbad60286a35991ee95539fe1a21628335f3e"
+      }
+    },
+    {
+      "name": "Raphael 4.2.0",
+      "options": {
+        "Threads": "1",
+        "Hash": "16"
+      },
+      "sha256": {
+        "/tmp/nexarch/engines/bin/raphael": "277a2a4ea24962689f8571f9f211fbc77b14d612c9aa111747b6bc13866b8c0b"
+      }
+    },
+    {
+      "name": "RubiChess 20240817",
+      "options": {
+        "Threads": "1",
+        "Hash": "16"
+      },
+      "sha256": {
+        "/tmp/nexarch/engines/bin/rubichess": "e364c93f162c572481547bfeb25d8bdbf8c907ec1df3816dd0fbfee4de5e5da9",
+        "/tmp/nexarch/engines/real/rubichess": "7866154e99f09ce3c89451402c8638bc338cd3e01ce81325ccd0dbcc612a7349"
+      }
+    },
+    {
+      "name": "Koivisto 9.0",
+      "options": {
+        "Threads": "1",
+        "Hash": "16"
+      },
+      "sha256": {
+        "/tmp/nexarch/engines/bin/koivisto": "1c28f937c0dae37e7f3834f8d0ce318d77da33bf2d392b23597c4b4b67e99b36"
+      }
+    },
+    {
+      "name": "Seer 2.8.0",
+      "options": {
+        "Threads": "1",
+        "Hash": "16"
+      },
+      "sha256": {
+        "/tmp/nexarch/engines/bin/seer": "5eb7d1c967580f3db6b33f14e83756aaaa02e6953a9cc266eba5c471c7cf5c9c",
+        "/tmp/nexarch/engines/real/seer": "3712c27a90574eaa28d212dea87071f936b5160c737cf09df6d098d8f6ff763f"
+      }
+    },
+    {
+      "name": "Arasan 26.1",
+      "options": {
+        "Threads": "1",
+        "Hash": "16",
+        "NNUE file": "/tmp/nexarch/engines/bin/arasanv8-20261005.nnue"
+      },
+      "sha256": {
+        "/tmp/nexarch/engines/bin/arasan": "08665b0d4871584d1deb247fea8a878895722fff03d2614b9b667dcb7542e0b6",
+        "/tmp/nexarch/engines/bin/arasanv8-20261005.nnue": "1f98bc6c1ac615646d66d409e138225c56765ad0c1065f1ce20a22a56c631927"
+      }
+    },
+    {
+      "name": "Renegade 1.3.1",
+      "options": {
+        "Threads": "1",
+        "Hash": "16"
+      },
+      "sha256": {
+        "/tmp/nexarch/engines/bin/renegade": "960958ab983a70f7b5a2b159adce20268551f06c082124a89b65cef5cf186ba0",
+        "/tmp/nexarch/engines/real/renegade": "c07a22fcddcf158290a4de26c0134e31d3c412ef6e88ba3ae5bcc125ffb5493c"
+      }
+    },
+    {
+      "name": "Devre 7.0",
+      "options": {
+        "Threads": "1",
+        "Hash": "16"
+      },
+      "sha256": {
+        "/tmp/nexarch/engines/bin/devre": "e6e3a7a7d4ca05b668e21c04750f969a3dca2be1582256818662ddd6eb97580f"
+      }
+    },
+    {
+      "name": "Ethereal 14.40 (free, classical eval)",
+      "options": {
+        "Threads": "1",
+        "Hash": "16"
+      },
+      "sha256": {
+        "/tmp/nexarch/engines/bin/ethereal": "5f6bf98a04bc85d75e59dbe417c494feec2f527edf366d408303b6d9377b1649"
+      }
+    },
+    {
+      "name": "ShashChess 42.3 (High Tal)",
+      "options": {
+        "Threads": "1",
+        "Hash": "16",
+        "EvalFile": "/tmp/nexarch/engines/bin/nn-1a298aa575a0.nnue",
+        "High Tal": "true"
+      },
+      "sha256": {
+        "/tmp/nexarch/engines/bin/shashchess": "f8bb3dda152146a13dfd2ccf355e93ba766081e56acc62ce943ca1f61e3d27e1",
+        "/tmp/nexarch/engines/real/shashchess": "4bdf0907a31396218b9f63ad55e66e08f6c250ac89e53ef9d7b4d68ef9805c87",
+        "/tmp/nexarch/engines/bin/nn-1a298aa575a0.nnue": "1a298aa575a085434d29027978dc36867fe9c5bcea9376654b7a8eba1e52dfc2"
+      }
+    },
+    {
+      "name": "ShashChess 42.3 (Middle Tal)",
+      "options": {
+        "Threads": "1",
+        "Hash": "16",
+        "EvalFile": "/tmp/nexarch/engines/bin/nn-1a298aa575a0.nnue",
+        "Middle Tal": "true"
+      },
+      "sha256": {
+        "/tmp/nexarch/engines/bin/shashchess": "f8bb3dda152146a13dfd2ccf355e93ba766081e56acc62ce943ca1f61e3d27e1",
+        "/tmp/nexarch/engines/real/shashchess": "4bdf0907a31396218b9f63ad55e66e08f6c250ac89e53ef9d7b4d68ef9805c87",
+        "/tmp/nexarch/engines/bin/nn-1a298aa575a0.nnue": "1a298aa575a085434d29027978dc36867fe9c5bcea9376654b7a8eba1e52dfc2"
+      }
+    },
+    {
+      "name": "ShashChess 42.3 (High Petrosian)",
+      "options": {
+        "Threads": "1",
+        "Hash": "16",
+        "EvalFile": "/tmp/nexarch/engines/bin/nn-1a298aa575a0.nnue",
+        "High Petrosian": "true"
+      },
+      "sha256": {
+        "/tmp/nexarch/engines/bin/shashchess": "f8bb3dda152146a13dfd2ccf355e93ba766081e56acc62ce943ca1f61e3d27e1",
+        "/tmp/nexarch/engines/real/shashchess": "4bdf0907a31396218b9f63ad55e66e08f6c250ac89e53ef9d7b4d68ef9805c87",
+        "/tmp/nexarch/engines/bin/nn-1a298aa575a0.nnue": "1a298aa575a085434d29027978dc36867fe9c5bcea9376654b7a8eba1e52dfc2"
+      }
+    }
+  ],
+  "arms": [
+    {
+      "name": "candidate",
+      "options": {
+        "Threads": 1,
+        "Hash": 16,
+        "UCI_LimitStrength": false,
+        "EvalFile": "/kaggle/input/notebooks/markthegamer108/nexarch-confirm-g5/nexarch-g5.nnue"
+      },
+      "sha256": {
+        "/tmp/nexarch/engine/nexarch": "8096b0c03a864be6c87a1dafa5ff056d2da08523c65bdf1ad04a4c6ec77ccaad",
+        "/kaggle/input/notebooks/markthegamer108/nexarch-confirm-g5/nexarch-g5.nnue": "fad279511c9344c781f047822c5c95ee982ceb411422dab449ddc82385e283c4"
+      }
+    },
+    {
+      "name": "gen4",
+      "options": {
+        "Threads": 1,
+        "Hash": 16,
+        "UCI_LimitStrength": false,
+        "EvalFile": "/kaggle/input/notebooks/markthegamer108/nexarch-confirm-g4/nexarch-g4.nnue"
+      },
+      "sha256": {
+        "/tmp/nexarch/engine/nexarch": "8096b0c03a864be6c87a1dafa5ff056d2da08523c65bdf1ad04a4c6ec77ccaad",
+        "/kaggle/input/notebooks/markthegamer108/nexarch-confirm-g4/nexarch-g4.nnue": "a3f723e0d830ee066fc77a7b20ff71a5f14fceb2a324ee7e09e2e4263aed5f71"
+      }
+    }
+  ],
+  "panel_expected": 33,
+  "panel_skipped": [
+    {
+      "name": "Maia 1900",
+      "missing": "/tmp/nexarch/engines/bin/maia-1900.pb.gz"
+    }
+  ],
+  "openings_sha256": "eb0fc7b46ba0fd9d097113d7f9d9503bb70e3581888823dd5a200c35b138041a"
+}
