@@ -134,8 +134,13 @@ Two separate programs are GPL-3.0 because of their third-party dependencies, and
 the MIT engine:
 
 - `tools/lc0_batch_grade.py` loads Lc0's Python module, which is GPL-3.0.
-- `gui/nexarch_gui.py` and `gui/assets/cutechess/` are the Nexarch Arena desktop companion; they import
-  python-chess (GPL-3.0) and use Cute Chess assets (GPL-3.0). The Cute Chess client shipped with the
-  release is the unmodified GPL-3.0 Cute Chess 1.5.1, with its source and license included.
+- `gui/cutechess-source/` and `gui/arena/` are the **Cute Chess - Nexarch Remake** desktop GUI.
+  It is built from the literal GPL-3.0-or-later Cute Chess 1.5.1 source and adds online play,
+  live rankings, the anonymous game setting and a Nexarch menu. The complete source and license
+  are included.
+- `gui/nexarch_gui.py` is the web Arena companion. It imports python-chess (GPL-3.0) and uses
+  the Cute Chess assets, so it is GPL-3.0 too.
+
+The Nexarch engine is a separate MIT program.
 
 [THIRD_PARTY.md](THIRD_PARTY.md) lists every third-party component and its license.

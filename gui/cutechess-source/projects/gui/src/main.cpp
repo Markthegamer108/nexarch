@@ -58,7 +58,7 @@ int main(int argc, char* argv[])
 		if (arguments.first() == QLatin1String("-v") ||
 			arguments.first() == QLatin1String("--version"))
 		{
-			out << "Cute Chess " << CUTECHESS_VERSION << '\n';
+			out << "Cute Chess " << CUTECHESS_VERSION << " (Nexarch Remake)" << '\n';
 			out << "Using Qt version " << qVersion() << '\n';
 			out << "Running on " << QSysInfo::prettyProductName();
 			out << "/" << QSysInfo::currentCpuArchitecture() << '\n' << '\n';

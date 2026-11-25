@@ -13,6 +13,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 APP = "Nexarch"
+TELEMETRY_URL = "http://158.180.55.245:8090/collect"
 BANNER = r"""
       /\        N E X A R C H
      /  \       chess engine and GUI
@@ -138,7 +139,15 @@ def install_files(root, prefix, net):
     (prefix / "nets").mkdir(parents=True, exist_ok=True)
     shutil.copy2(net, prefix / "nets" / net.name)
     entries = install_engines(root, prefix, net)
-    copy_tree(root / "gui", prefix / "gui")
+    arena = root / "gui" / "arena"
+    if not arena.is_dir():
+        raise SystemExit("The Cute Chess - Nexarch Remake build is missing from gui/arena.")
+    copy_tree(arena, prefix / "gui" / "arena")
+    for name in ("COPYING", "AUTHORS", "README.md"):
+        src = root / "gui" / "cutechess" / name
+        if src.exists():
+            shutil.copy2(src, prefix / "gui" / "arena" / name)
+    copy_tree(root / "gui" / "assets" / "cutechess", prefix / "gui" / "assets" / "cutechess")
     (prefix / "install").mkdir(parents=True, exist_ok=True)
     shutil.copy2(root / "install" / "uninstall.py", prefix / "install" / "uninstall.py")
     for name in ("LICENSE", "CREDITS.md", "README.md", "GPU.md", "THIRD_PARTY.md", "ENGINES.md"):
@@ -146,33 +155,32 @@ def install_files(root, prefix, net):
         if src.exists():
             shutil.copy2(src, prefix / name)
     (prefix / "gui" / "engines.json").write_text(json.dumps(entries, indent=1) + "\n")
-    launcher = prefix / "gui" / ("nexarch-gui.bat" if os.name == "nt" else "nexarch-gui")
-    if os.name == "nt":
-        python = sys.executable
-        pythonw = Path(python).with_name("pythonw.exe")
-        if pythonw.exists():
-            python = str(pythonw)
-        write_text(launcher, "@echo off\r\n"
-                             f'"{python}" "%~dp0nexarch_gui.py" --host 127.0.0.1 --port 8765 '
-                             f'--engines "%~dp0engines.json" --open %*\r\n')
-    else:
-        write_text(launcher, "#!/bin/sh\n"
-                             "HERE=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)\n"
-                             f'exec "{sys.executable}" "$HERE/nexarch_gui.py" --host 127.0.0.1 --port 8765 '
-                             '--engines "$HERE/engines.json" --open "$@"\n', mode=0o755)
-    return launcher
+    return None
 
 
-def write_settings(prefix, telemetry, endpoint):
-    config = Path.home() / ".config" / "nexarch" / "gui.json"
-    config.parent.mkdir(parents=True, exist_ok=True)
-    data = {"telemetry": bool(telemetry), "endpoint": endpoint.strip(),
-            "anonymous_id": uuid.uuid4().hex, "threads": 1, "hash": 64, "skill": 20}
-    config.write_text(json.dumps(data, indent=1) + "\n")
-    return config
+def write_settings(prefix, telemetry):
+    ident = uuid.uuid4().hex
+    body = ("[nexarch]\n"
+            f"telemetry={'true' if telemetry else 'false'}\n"
+            f"anonymous_id={ident}\n")
+    portable = prefix / "config" / "cutechess" / "cutechess.ini"
+    write_text(portable, body)
+    user = Path.home() / ".config" / "cutechess" / "cutechess.ini"
+    if not user.exists():
+        write_text(user, body)
+    return portable
 
 
 def find_cutechess(prefix):
+    arena = prefix / "gui" / "arena"
+    if os.name == "nt":
+        for candidate in (arena / "cutechess.exe", arena / "cutechess"):
+            if candidate.is_file():
+                return candidate
+    else:
+        for candidate in (arena / "cutechess", arena / "cutechess.exe"):
+            if candidate.is_file():
+                return candidate
     base = prefix / "gui" / "cutechess"
     if os.name == "nt":
         for candidate in (base / "cutechess-1.5.1-win64" / "cutechess.exe", base / "cutechess.exe"):
@@ -212,10 +220,15 @@ def install_cutechess(prefix):
     else:
         launcher = gui / "nexarch-cutechess"
         rel = os.path.relpath(src, gui)
+        extra = ""
+        if (gui / "arena" / "lib").is_dir():
+            extra = "export LD_LIBRARY_PATH=\"$HERE/arena/lib:$LD_LIBRARY_PATH\"\n"
+        if src.name.endswith(".AppImage"):
+            extra += "export APPIMAGE_EXTRACT_AND_RUN=1\n"
         write_text(launcher, "#!/bin/sh\n"
                              "HERE=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)\n"
                              "export XDG_CONFIG_HOME=\"$HERE/../config\"\n"
-                             "export APPIMAGE_EXTRACT_AND_RUN=1\n"
+                             + extra +
                              f'exec "$HERE/{rel}" "$@"\n', mode=0o755)
     return launcher
 
@@ -228,10 +241,8 @@ def install_desktop_entry(prefix, web_launcher, cc_launcher, shortcut):
     icon = prefix / "gui" / "assets" / "cutechess" / "cutechess_32x32.png"
     if not icon.exists():
         icon = prefix / "gui" / "pieces" / "nlt45.svg"
-    entries = [("nexarch.desktop", "Nexarch", "Play chess against Nexarch", primary)]
-    if cc_launcher and web_launcher:
-        entries.append(("nexarch-arena.desktop", "Nexarch Arena",
-                        "Online and analysis companion", web_launcher))
+    entries = [("nexarch.desktop", "Cute Chess - Nexarch Remake",
+                "Play chess against the Nexarch engine", primary)]
     for name, title, comment, exec_path in entries:
         write_text(applications / name, f"""[Desktop Entry]
 Type=Application
@@ -273,9 +284,7 @@ def install_windows_shortcuts(prefix, web_launcher, cc_launcher, shortcut):
         desktop = Path(os.environ.get("USERPROFILE", str(Path.home()))) / "Desktop"
         start = Path(os.environ.get("APPDATA", str(Path.home()))) / "Microsoft" / "Windows" / "Start Menu" / "Programs"
         icon = prefix / "gui" / "assets" / "cutechess" / "cutechess_win.ico"
-        targets = [("Nexarch.lnk", cc_launcher or web_launcher)]
-        if cc_launcher and web_launcher:
-            targets.append(("Nexarch Arena.lnk", web_launcher))
+        targets = [("Cute Chess - Nexarch Remake.lnk", cc_launcher or web_launcher)]
         for folder in (desktop, start):
             if not folder.is_dir():
                 continue
@@ -308,20 +317,20 @@ def install_macos_app(prefix, launcher, shortcut):
                mode=0o755)
     if not shortcut:
         return
-    app = Path.home() / "Applications" / "Nexarch.app"
+    app = Path.home() / "Applications" / "Cute Chess - Nexarch Remake.app"
     (app / "Contents" / "MacOS").mkdir(parents=True, exist_ok=True)
     (app / "Contents" / "Info.plist").write_text(f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-<key>CFBundleName</key><string>Nexarch</string>
-<key>CFBundleDisplayName</key><string>Nexarch</string>
-<key>CFBundleExecutable</key><string>Nexarch</string>
+<key>CFBundleName</key><string>Cute Chess - Nexarch Remake</string>
+<key>CFBundleDisplayName</key><string>Cute Chess - Nexarch Remake</string>
+<key>CFBundleExecutable</key><string>CuteChessNexarchRemake</string>
 <key>CFBundleIdentifier</key><string>org.nexarch.chess</string>
 <key>CFBundleVersion</key><string>0.5</string>
 <key>CFBundleShortVersionString</key><string>0.5</string>
 </dict></plist>
 """)
-    write_text(app / "Contents" / "MacOS" / "Nexarch", f"#!/bin/sh\nexec '{launcher}' \"$@\"\n", mode=0o755)
+    write_text(app / "Contents" / "MacOS" / "CuteChessNexarchRemake", f"#!/bin/sh\nexec '{launcher}' \"$@\"\n", mode=0o755)
 
 
 def main():
@@ -330,7 +339,6 @@ def main():
     ap.add_argument("--net", default=None)
     ap.add_argument("--shortcut", choices=["yes", "no"], default=None)
     ap.add_argument("--telemetry", choices=["yes", "no"], default=None)
-    ap.add_argument("--endpoint", default="")
     ap.add_argument("--no-prompt", action="store_true")
     args = ap.parse_args()
 
@@ -359,31 +367,19 @@ def main():
         shortcut = ask("Create a desktop shortcut?", True)
 
     telemetry = args.telemetry == "yes" if args.telemetry else False
-    endpoint = args.endpoint
     if args.telemetry is None and not args.no_prompt:
         print("\n" + colour("Anonymous game collection (optional)", "1"))
-        print("When enabled, finished games against Nexarch are sent to a server with no")
-        print("account name, email address or hardware ID. It is off by default.")
+        print("When enabled, finished games against Nexarch are sent to:")
+        print("  " + TELEMETRY_URL)
+        print("No account name, email address or hardware ID is included. It is off by default.")
         telemetry = ask("Enable anonymous game collection?", False)
-        if telemetry:
-            try:
-                endpoint = input("Upload endpoint (blank keeps games on this computer): ").strip()
-            except EOFError:
-                endpoint = ""
-
-    try:
-        subprocess.run([sys.executable, "-c", "import chess"], check=True,
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except Exception:
-        print(colour("The GUI needs Python 3 and the 'chess' package.", "33"))
-        print(f"  {sys.executable} -m pip install --user chess")
-        if not args.no_prompt and ask("Install python-chess now?", True):
-            subprocess.run([sys.executable, "-m", "pip", "install", "--user", "chess"], check=False)
 
     print(f"\nInstalling to {colour(str(prefix), '1')}")
-    print("  [1/3] copying the engine, network and GUIs ...")
+    print("  [1/3] copying the engine, network and Cute Chess ...")
     launcher = install_files(ROOT, prefix, net)
     cc_launcher = install_cutechess(prefix)
+    if not cc_launcher:
+        raise SystemExit("The Cute Chess - Nexarch Remake binary is missing. Build it from gui/cutechess-source.")
     print("  [2/3] creating the shortcut and uninstall entry ...")
     if os.name == "nt":
         install_windows_shortcuts(prefix, launcher, cc_launcher, shortcut)
@@ -392,21 +388,20 @@ def main():
     else:
         install_desktop_entry(prefix, launcher, cc_launcher, shortcut)
     print("  [3/3] writing settings ...")
-    config = write_settings(prefix, telemetry, endpoint)
+    config = write_settings(prefix, telemetry)
 
     print(colour("\nDone.", "1;32"))
     print(f"Engine:  {prefix / 'engine'}")
-    print(f"Cute Chess: {cc_launcher or 'not bundled'}")
-    print(f"Arena:   {launcher}")
-    print(f"Settings:{config}")
+    print(f"Cute Chess: {cc_launcher}")
+    print(f"Settings: {config}")
     if telemetry:
-        print(f"Anonymous games: {'sent to ' + endpoint if endpoint else 'saved on this computer (no endpoint set)'}")
+        print(f"Anonymous games: sent to {TELEMETRY_URL}")
     else:
         print("Anonymous games: off")
-    print("\nStart Nexarch from the shortcut, or run:")
-    print(f"  {cc_launcher or launcher}")
+    print("\nStart Cute Chess - Nexarch Remake from the shortcut, or run:")
+    print(f"  {cc_launcher}")
     print("Cute Chess is preconfigured with Nexarch. Use its engine settings to add Stockfish")
-    print("or any other UCI engine. The Nexarch Arena companion is a separate shortcut.")
+    print("or any other UCI engine.")
 
 
 if __name__ == "__main__":

@@ -31,8 +31,11 @@
 #include <QWindow>
 #include <QSettings>
 #include <QSysInfo>
+#include <QTextStream>
 
 #include <board/boardfactory.h>
+#include <board/piece.h>
+#include <board/westernboard.h>
 #include <chessgame.h>
 #include <timecontrol.h>
 #include <enginemanager.h>
@@ -41,6 +44,8 @@
 #include <chessplayer.h>
 #include <humanbuilder.h>
 #include <tournament.h>
+#include <pgngame.h>
+#include <board/board.h>
 
 #include "cutechessapp.h"
 #include "gameviewer.h"
@@ -55,10 +60,37 @@
 #include "evalwidget.h"
 #include "boardview/boardscene.h"
 #include "tournamentresultsdlg.h"
+#include "nexarch.h"
 
 #if 0
 #include <modeltest.h>
 #endif
+
+namespace
+{
+QString uciFromGenericMove(const Chess::GenericMove& move)
+{
+	if (move.isNull())
+		return QString();
+	QString uci;
+	uci += QChar('a' + move.sourceSquare().file());
+	uci += QChar('1' + move.sourceSquare().rank());
+	uci += QChar('a' + move.targetSquare().file());
+	uci += QChar('1' + move.targetSquare().rank());
+	if (move.promotion() > 0)
+	{
+		QChar piece('q');
+		if (move.promotion() == Chess::WesternBoard::Knight)
+			piece = 'n';
+		else if (move.promotion() == Chess::WesternBoard::Bishop)
+			piece = 'b';
+		else if (move.promotion() == Chess::WesternBoard::Rook)
+			piece = 'r';
+		uci += piece;
+	}
+	return uci;
+}
+}
 
 MainWindow::TabData::TabData(ChessGame* game, Tournament* tournament)
 	: m_id(game),
@@ -212,10 +244,19 @@ void MainWindow::createActions()
 	m_showNextTabAct->setShortcut(QKeySequence(Qt::ControlModifier | Qt::Key_Tab));
 	#endif
 
-	m_aboutAct = new QAction(tr("&About Cute Chess..."), this);
+	m_playOnlineAct = new QAction(tr("Play &Online..."), this);
+	m_rankingsAct = new QAction(tr("Live &Rankings..."), this);
+	m_nexarchSettingsAct = new QAction(tr("Nexarch &Settings..."), this);
+	m_creditsAct = new QAction(tr("&Credits..."), this);
+
+	m_aboutAct = new QAction(tr("&About Cute Chess - Nexarch Remake..."), this);
 	m_aboutAct->setMenuRole(QAction::AboutRole);
 
 	connect(m_newGameAct, SIGNAL(triggered()), this, SLOT(newGame()));
+	connect(m_playOnlineAct, SIGNAL(triggered()), this, SLOT(playOnline()));
+	connect(m_rankingsAct, SIGNAL(triggered()), this, SLOT(showRankings()));
+	connect(m_nexarchSettingsAct, SIGNAL(triggered()), this, SLOT(showNexarchSettings()));
+	connect(m_creditsAct, SIGNAL(triggered()), this, SLOT(showCredits()));
 	connect(m_copyFenAct, SIGNAL(triggered()), this, SLOT(copyFen()));
 	connect(m_pasteFenAct, SIGNAL(triggered()), this, SLOT(pasteFen()));
 	connect(copyFenSequence, SIGNAL(triggered()), this, SLOT(copyFen()));
@@ -304,6 +345,13 @@ void MainWindow::createMenus()
 	m_tournamentMenu->addAction(m_stopTournamentAct);
 	m_tournamentMenu->addAction(m_showTournamentResultsAct);
 	m_stopTournamentAct->setEnabled(false);
+
+	auto nexarchMenu = menuBar()->addMenu(tr("&Nexarch"));
+	nexarchMenu->addAction(m_playOnlineAct);
+	nexarchMenu->addAction(m_rankingsAct);
+	nexarchMenu->addSeparator();
+	nexarchMenu->addAction(m_nexarchSettingsAct);
+	nexarchMenu->addAction(m_creditsAct);
 
 	m_toolsMenu = menuBar()->addMenu(tr("T&ools"));
 	m_toolsMenu->addAction(m_showSettingsAct);
@@ -454,8 +502,18 @@ void MainWindow::addGame(ChessGame* game)
 		}
 	}
 	else
+	{
 		connect(game, SIGNAL(finished(ChessGame*)),
 			this, SLOT(onGameFinished(ChessGame*)));
+		connect(game, &ChessGame::finished, this,
+			[](ChessGame* finishedGame, const Chess::Result& result)
+			{
+				QString pgn;
+				QTextStream stream(&pgn);
+				finishedGame->pgn()->write(stream);
+				Nexarch::sendGame(pgn, result.toShortString());
+			});
+	}
 
 	m_tabs.append(tab);
 	m_tabBar->setCurrentIndex(m_tabBar->addTab(genericTitle(tab)));
@@ -710,6 +768,7 @@ void MainWindow::closeCurrentGame()
 
 void MainWindow::newGame()
 {
+	Nexarch::applyStrength();
 	EngineManager* engineManager = CuteChessApplication::instance()->engineManager();
 	NewGameDialog dlg(engineManager, this);
 	if (dlg.exec() != QDialog::Accepted)
@@ -739,6 +798,101 @@ void MainWindow::newGame()
 		this, SLOT(onGameStartFailed(ChessGame*)));
 	CuteChessApplication::instance()->gameManager()->newGame(game,
 		builders[Chess::Side::White], builders[Chess::Side::Black]);
+}
+
+void MainWindow::playOnline()
+{
+	NexarchOnlineDialog dialog(this);
+	if (dialog.exec() != QDialog::Accepted)
+		return;
+	NexarchOnline* online = dialog.takeOnline();
+	if (online == nullptr)
+		return;
+	online->setParent(this);
+
+	const bool humanIsWhite = online->color() == "w";
+	auto game = new ChessGame(Chess::BoardFactory::create("standard"), new PgnGame());
+	game->setTimeControl(TimeControl("inf"));
+
+	const QStringList initial = online->initialMoves();
+	if (!initial.isEmpty())
+	{
+		auto parser = Chess::BoardFactory::create("standard");
+		QVector<Chess::Move> moves;
+		for (const QString& uci : initial)
+		{
+			Chess::Move move = parser->moveFromString(uci);
+			if (move.isNull() || !parser->isLegalMove(move))
+				break;
+			parser->makeMove(move);
+			moves.append(move);
+		}
+		game->setMoves(moves);
+	}
+
+	if (((initial.size() % 2) == 0) == humanIsWhite)
+		game->pause();
+
+	auto human = new HumanBuilder(online->playerName());
+	auto remote = new RemoteBuilder(online->opponentName());
+	PlayerBuilder* white = humanIsWhite ? static_cast<PlayerBuilder*>(human) : remote;
+	PlayerBuilder* black = humanIsWhite ? static_cast<PlayerBuilder*>(remote) : human;
+
+	connect(game, SIGNAL(initialized(ChessGame*)),
+		this, SLOT(addGame(ChessGame*)));
+	connect(game, SIGNAL(startFailed(ChessGame*)),
+		this, SLOT(onGameStartFailed(ChessGame*)));
+
+	const int skip = online->initialCount();
+	connect(game, &ChessGame::started, this,
+		[=](ChessGame* startedGame)
+		{
+			RemotePlayer* player = qobject_cast<RemotePlayer*>(
+				startedGame->player(humanIsWhite ? Chess::Side::Black : Chess::Side::White));
+			if (player != nullptr)
+				connect(online, &NexarchOnline::movesReceived,
+					player, &RemotePlayer::receiveMoves);
+			connect(startedGame, &ChessGame::moveMade, startedGame,
+				[=](const Chess::GenericMove& move, const QString&, const QString&)
+				{
+					int ply = startedGame->moves().size();
+					if (ply <= skip)
+						return;
+					bool ours = ((ply % 2) == 1) == humanIsWhite;
+					if (ours)
+						QMetaObject::invokeMethod(online, "sendMove",
+							Qt::QueuedConnection,
+							Q_ARG(QString, uciFromGenericMove(move)));
+				});
+			connect(startedGame, &ChessGame::finished, online,
+				[online](ChessGame* finishedGame, const Chess::Result& result)
+				{
+					Q_UNUSED(finishedGame);
+					online->stopPolling();
+					online->reportResult(result.toShortString());
+				});
+			online->startPolling();
+		});
+
+	CuteChessApplication::instance()->gameManager()->newGame(game, white, black);
+}
+
+void MainWindow::showRankings()
+{
+	NexarchRankingsDialog dialog(this);
+	dialog.exec();
+}
+
+void MainWindow::showNexarchSettings()
+{
+	NexarchSettingsDialog dialog(this);
+	dialog.exec();
+}
+
+void MainWindow::showCredits()
+{
+	NexarchCreditsDialog dialog(this);
+	dialog.exec();
 }
 
 void MainWindow::onGameStartFailed(ChessGame* game)
@@ -783,6 +937,7 @@ void MainWindow::onGameFinished(ChessGame* game)
 
 void MainWindow::newTournament()
 {
+	Nexarch::applyStrength();
 	NewTournamentDialog dlg(CuteChessApplication::instance()->engineManager(), this);
 	if (dlg.exec() != QDialog::Accepted)
 		return;
@@ -1013,19 +1168,21 @@ void MainWindow::pasteFen()
 void MainWindow::showAboutDialog()
 {
 	QString html;
-	html += "<h3>" + QString("Cute Chess %1")
-		.arg(CuteChessApplication::applicationVersion()) + "</h3>";
+	html += "<h3>" + QString("Cute Chess - Nexarch Remake 1.0") + "</h3>";
+	html += "<p>" + tr("A modified build of Cute Chess %1, GPL-3.0-or-later.")
+		.arg(CuteChessApplication::applicationVersion()) + "</p>";
 	html += "<p>" + tr("Using Qt version %1").arg(qVersion()) + "</p>";
 	html += "<p>" + tr("Running on %1/%2").arg(QSysInfo::prettyProductName(), QSysInfo::currentCpuArchitecture()) + "</p>";
-	html += "<p>" + tr("Copyright 2008-2020 "
-			   "Cute Chess authors") + "</p>";
+	html += "<p>" + tr("Cute Chess copyright 2008-2020 the Cute Chess authors. "
+			   "Nexarch additions copyright 2026 Mark Ivanovskyy.") + "</p>";
 	html += "<p>" + tr("This is free software; see the source for copying "
 			   "conditions. There is NO warranty; not even for "
 			   "MERCHANTABILITY or FITNESS FOR A PARTICULAR "
 			   "PURPOSE.") + "</p>";
 	html += "<a href=\"http://cutechess.com\">cutechess.com</a><br>";
+	html += "<a href=\"https://github.com/Markthegamer108/nexarch\">Nexarch on GitHub</a><br>";
 
-	QMessageBox::about(this, tr("About Cute Chess"), html);
+	QMessageBox::about(this, tr("About Cute Chess - Nexarch Remake"), html);
 }
 
 void MainWindow::lockCurrentGame()

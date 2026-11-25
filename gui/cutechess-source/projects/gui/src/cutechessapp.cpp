@@ -23,6 +23,8 @@
 #include <QTime>
 #include <QFileInfo>
 #include <QSettings>
+#include <QPalette>
+#include <QStyleFactory>
 
 #include <mersenne.h>
 #include <enginemanager.h>
@@ -59,6 +61,29 @@ CuteChessApplication::CuteChessApplication(int& argc, char* argv[])
 {
 	Mersenne::initialize(QTime(0,0,0).msecsTo(QTime::currentTime()));
 
+	if (palette().color(QPalette::Window).lightness() < 128)
+	{
+		setStyle(QStyleFactory::create("Fusion"));
+		QPalette light;
+		light.setColor(QPalette::Window, QColor(239, 239, 239));
+		light.setColor(QPalette::WindowText, Qt::black);
+		light.setColor(QPalette::Base, Qt::white);
+		light.setColor(QPalette::AlternateBase, QColor(246, 246, 246));
+		light.setColor(QPalette::ToolTipBase, Qt::white);
+		light.setColor(QPalette::ToolTipText, Qt::black);
+		light.setColor(QPalette::Text, Qt::black);
+		light.setColor(QPalette::Button, QColor(239, 239, 239));
+		light.setColor(QPalette::ButtonText, Qt::black);
+		light.setColor(QPalette::BrightText, Qt::red);
+		light.setColor(QPalette::Link, QColor(0, 102, 204));
+		light.setColor(QPalette::Highlight, QColor(48, 140, 198));
+		light.setColor(QPalette::HighlightedText, Qt::white);
+		light.setColor(QPalette::Disabled, QPalette::Text, QColor(120, 120, 120));
+		light.setColor(QPalette::Disabled, QPalette::ButtonText, QColor(120, 120, 120));
+		light.setColor(QPalette::Disabled, QPalette::WindowText, QColor(120, 120, 120));
+		setPalette(light);
+	}
+
 	// Set the application icon
 	QIcon icon;
 	icon.addFile(":/icons/cutechess_512x512.png");
@@ -75,6 +100,7 @@ CuteChessApplication::CuteChessApplication(int& argc, char* argv[])
 	QCoreApplication::setOrganizationName("cutechess");
 	QCoreApplication::setOrganizationDomain("cutechess.com");
 	QCoreApplication::setApplicationName("cutechess");
+	QApplication::setApplicationDisplayName("Cute Chess - Nexarch Remake");
 	QCoreApplication::setApplicationVersion(CUTECHESS_VERSION);
 
 	// Use Ini format on all platforms

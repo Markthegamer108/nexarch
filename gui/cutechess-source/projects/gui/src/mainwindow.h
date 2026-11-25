@@ -42,6 +42,7 @@ class Tournament;
 class GameTabBar;
 class EvalHistory;
 class EvalWidget;
+class NexarchOnline;
 
 /**
  * MainWindow
@@ -64,6 +65,10 @@ class MainWindow : public QMainWindow
 
 	private slots:
 		void newGame();
+		void playOnline();
+		void showRankings();
+		void showNexarchSettings();
+		void showCredits();
 		void newTournament();
 		void onWindowMenuAboutToShow();
 		void showGameWindow();
@@ -158,6 +163,10 @@ class MainWindow : public QMainWindow
 		QAction* m_showPreviousTabAct;
 		QAction* m_showNextTabAct;
 		QAction* m_aboutAct;
+		QAction* m_playOnlineAct;
+		QAction* m_rankingsAct;
+		QAction* m_nexarchSettingsAct;
+		QAction* m_creditsAct;
 		QAction* m_showSettingsAct;
 
 		PlainTextLog* m_engineDebugLog;

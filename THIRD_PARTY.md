@@ -8,18 +8,19 @@ map; the full credits are in `CREDITS.md`, and the grading-engine table is in `E
 
 | Component | License | Source |
 |---|---|---|
-| Cute Chess 1.5.1 | GPL-3.0-or-later | https://github.com/cutechess/cutechess/tree/v1.5.1 |
+| Cute Chess 1.5.1 (Nexarch Remake) | GPL-3.0-or-later | `gui/cutechess-source/`, upstream v1.5.1 tag |
 | Cute Chess icons and logo | GPL-3.0-or-later | same repository, `projects/gui/res/icons` |
-| python-chess (used by Nexarch Arena) | GPL-3.0 | https://github.com/niklasf/python-chess |
+| python-chess (relay server and web Arena) | GPL-3.0 | https://github.com/niklasf/python-chess |
 | Qt 6 (bundled with Cute Chess) | LGPL-3.0 / GPL-3.0 | https://www.qt.io/ |
 | Cburnett chess pieces | CC BY-SA 3.0 | via Wikimedia Commons |
 
-The official Cute Chess Linux AppImage and Windows zip are redistributed unmodified. The
-complete corresponding source is the v1.5.1 tag above and is included with the release as
-`gui/cutechess/cutechess-1.5.1.tar.gz`. Nexarch only adds an `engines.json` configuration
-file, which is data. The Nexarch Arena (`gui/nexarch_gui.py`) is a separate GPL-3.0 program
-because it imports python-chess and uses the Cute Chess assets; the engine and the rest of
-this repository remain MIT.
+The release GUI is **Cute Chess - Nexarch Remake**, built from the literal Cute Chess 1.5.1
+source in `gui/cutechess-source/`. The modifications (online play, live rankings, the
+anonymous game setting, a Nexarch menu, dark-theme contrast and the title) are GPL-3.0-or-later
+and the complete corresponding source is included. The official Cute Chess Linux AppImage and
+Windows zip are kept as unmodified upstream references. The relay server (`gui/relay_server.py`) and
+the web Arena (`gui/nexarch_gui.py`) are separate GPL-3.0 programs because they import
+python-chess; the engine and the rest of this repository remain MIT.
 
 ## The optional OpenCL backend
 

@@ -20,7 +20,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-set(QT_COMPONENTS Core Gui Widgets Concurrent Svg PrintSupport Core5Compat)
+set(QT_COMPONENTS Core Gui Widgets Concurrent Svg PrintSupport Core5Compat Network)
 if(WITH_TESTS)
 	enable_testing()
 	set(QT_COMPONENTS ${QT_COMPONENTS} Test)
@@ -202,6 +202,7 @@ add_executable(gui
 	projects/gui/src/boardview/piecechooser.cpp
 
 	projects/gui/src/mainwindow.cpp
+	projects/gui/src/nexarch.cpp
 	projects/gui/src/gameviewer.cpp
 	projects/gui/src/engineconfigurationdlg.cpp
 	projects/gui/src/gamewall.cpp
@@ -284,7 +285,7 @@ target_include_directories(gui PRIVATE
 	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/projects/gui/src>
 )
 
-target_link_libraries(gui Qt::Core Qt::Widgets Qt::Gui Qt::Concurrent Qt::Svg Qt::PrintSupport Qt::Core5Compat)
+target_link_libraries(gui Qt::Core Qt::Widgets Qt::Gui Qt::Concurrent Qt::Svg Qt::PrintSupport Qt::Core5Compat Qt::Network)
 target_link_libraries(gui lib)
 
 if(WITH_TESTS)

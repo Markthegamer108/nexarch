@@ -29,3 +29,5 @@ tools/binpack/binpack2nexarch
 engine/nexarch-cpu
 engine/nexarch-cpu-avx2
 engine/nexarch-gpu
+gui/arena/cutechess
+gui/arena/lib/
