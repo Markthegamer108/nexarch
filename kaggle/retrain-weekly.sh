@@ -72,10 +72,27 @@ STREAM=${RETRAIN_STREAM:-16000000}
 
 say "Config: hidden=$HIDDEN epochs=$EPOCHS budget=${BUDGET}min lr=$LR batch=$BATCH"
 
+# Build data globs from train_sources.txt (convert to Kaggle input paths)
+# The Kaggle job mounts datasets at /kaggle/input/<dataset-name>/
+# We need to pass globs that match the mounted files
+DATA_GLOBS=()
+for ds in "${DATASETS[@]}"; do
+    ds_name=$(basename "$ds")
+    DATA_GLOBS+=("/kaggle/input/$ds_name/**/*.bin")
+    DATA_GLOBS+=("/kaggle/input/$ds_name/**/*.pgn")
+    DATA_GLOBS+=("/kaggle/input/$ds_name/**/*.zst")
+done
+# Also add acquired data (will be mounted separately)
+for f in data/acquired/fishtest/*.bin data/acquired/lc0/*.bin data/acquired/games/*.bin data/acquired/games/*.pgn data/acquired/games/*.zst data/acquired/distilled/*.pgn 2>/dev/null; do
+    [ -f "$f" ] && DATA_GLOBS+=("$f")
+done
+
+say "Data globs: ${#DATA_GLOBS[@]} patterns"
+
 push_kernel "$NAME" 40 .venv/bin/python kaggle/job.py --name "$NAME" --gpu \
     --source markthegamer108/nexarch-confirm-g4 \
     "${DS_ARGS[@]}" \
-    --cmd "G5_MODE=h1024 G5_BUDGET=$BUDGET G5_EPOCHS=$EPOCHS G5_A_LR=$LR G5_B_LR=$LR G5_RESUME=\$(find /kaggle/input -name '*.pt' -print -quit | head -1) bash kaggle/train-g5.sh {out} {cpus}" \
+    --cmd "G5_MODE=h1024 G5_BUDGET=$BUDGET G5_EPOCHS=$EPOCHS G5_A_LR=$LR G5_B_LR=$LR G5_RESUME=\$(find /kaggle/input -name '*.pt' -print -quit | head -1) DATA_GLOBS=($(printf '"%s" ' "${DATA_GLOBS[@]}")) bash kaggle/train-g5-master.sh {out} {cpus}" \
     --push || { say "Failed to launch $NAME"; exit 1; }
 
 bash kaggle/ensure-kernel.sh "$NAME"
